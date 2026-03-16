@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E7-04 (Application Kit Generation)
-Currently working: E8-01 (Outreach Message Generation)
-Next up: E8-02
+Last completed: E8-01 (Outreach Message Generation)
+Currently working: E8-02 (Outreach Tracking)
+Next up: E9-01

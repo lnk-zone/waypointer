@@ -295,3 +295,21 @@ export type ResumeEditItem = z.infer<typeof resumeEditSchema>;
 export type GenerateApplicationKitOutput = z.infer<
   typeof generateApplicationKitSchema
 >;
+
+// ─── GENERATE_OUTREACH (PR Prompt 11) ───────────────────────────────
+
+export const outreachGuidanceSchema = z.object({
+  when_to_use: z.string().min(1),
+  follow_up_timing: z.string().min(1),
+  what_not_to_say: z.string().min(1),
+});
+
+export const generateOutreachSchema = z.object({
+  linkedin_message: z.string().min(1).max(300),
+  email_message: z.string().min(1),
+  followup_message: z.string().min(1),
+  guidance: outreachGuidanceSchema,
+});
+
+export type OutreachGuidance = z.infer<typeof outreachGuidanceSchema>;
+export type GenerateOutreachOutput = z.infer<typeof generateOutreachSchema>;
