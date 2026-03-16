@@ -94,6 +94,7 @@ function InterviewsContent() {
   const [interviewDuration, setInterviewDuration] = useState<number>(15);
   const [interviewDifficulty, setInterviewDifficulty] =
     useState<string>("standard");
+  const [voiceAvailable, setVoiceAvailable] = useState<boolean | null>(null);
 
   // Fetch role paths and saved jobs
   useEffect(() => {
@@ -151,6 +152,20 @@ function InterviewsContent() {
     }
     fetchData();
   }, []);
+
+  // Check ElevenLabs availability when modal opens
+  useEffect(() => {
+    if (!showModal) return;
+    setVoiceAvailable(null);
+    fetch("/api/v1/employee/interviews/health")
+      .then((r) => r.json())
+      .then((json) => {
+        setVoiceAvailable(json?.data?.available === true);
+      })
+      .catch(() => {
+        setVoiceAvailable(false);
+      });
+  }, [showModal]);
 
   // Fetch interview prep
   const fetchPrep = useCallback(async () => {
@@ -439,6 +454,7 @@ function InterviewsContent() {
           onChangeFormat={setInterviewFormat}
           onChangeDuration={setInterviewDuration}
           onChangeDifficulty={setInterviewDifficulty}
+          voiceAvailable={voiceAvailable}
           onClose={() => setShowModal(false)}
           onBegin={() => {
             const params = new URLSearchParams();
@@ -543,6 +559,7 @@ function MockInterviewModal({
   onChangeFormat,
   onChangeDuration,
   onChangeDifficulty,
+  voiceAvailable,
   onClose,
   onBegin,
 }: {
@@ -554,6 +571,7 @@ function MockInterviewModal({
   interviewFormat: string;
   interviewDuration: number;
   interviewDifficulty: string;
+  voiceAvailable: boolean | null;
   onChangeType: (v: "general" | "company") => void;
   onChangeJobId: (v: string) => void;
   onChangeFormat: (v: string) => void;
@@ -732,14 +750,26 @@ function MockInterviewModal({
           </div>
         </div>
 
+        {/* Voice unavailable warning */}
+        {voiceAvailable === false && (
+          <div className="mt-5 rounded-md border border-[#D97706]/20 bg-[#D97706]/5 px-4 py-3 text-center">
+            <p className="text-xs text-[#D97706] font-medium">
+              Voice interviews are temporarily unavailable. Please try again shortly.
+            </p>
+          </div>
+        )}
+
         {/* Begin button */}
         <Button
           onClick={onBegin}
           className="w-full mt-6 gap-2"
-          disabled={interviewType === "company" && !interviewJobId}
+          disabled={
+            voiceAvailable !== true ||
+            (interviewType === "company" && !interviewJobId)
+          }
         >
           <Mic className="h-4 w-4" />
-          Begin Interview
+          {voiceAvailable === null ? "Checking availability..." : "Begin Interview"}
         </Button>
         <p className="text-[10px] text-text-secondary text-center mt-2">
           Microphone access will be requested when the session starts

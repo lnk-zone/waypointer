@@ -19,6 +19,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { createElevenLabsClient } from "@/lib/elevenlabs/client";
+import { injectVariables } from "@/lib/ai/pipeline";
 import { z } from "zod";
 
 // ─── Request Validation ───────────────────────────────────────────────
@@ -34,34 +35,6 @@ const startSessionSchema = z.object({
     z.literal(20),
   ]),
 });
-
-// ─── Prompt Variable Injection ────────────────────────────────────────
-
-/**
- * Inject variables into a prompt template by replacing {{variable_name}}
- * placeholders and resolving {{#if condition}}...{{/if}} blocks.
- */
-function injectPromptVariables(
-  template: string,
-  variables: Record<string, string>
-): string {
-  // Resolve {{#if variable_name}}...{{/if}} blocks
-  let result = template.replace(
-    /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
-    (_match: string, key: string, inner: string) => {
-      const value = variables[key];
-      return value && value.trim() ? inner : "";
-    }
-  );
-
-  // Replace {{variable_name}} placeholders
-  result = result.replace(
-    /\{\{(\w+)\}\}/g,
-    (_match: string, key: string) => variables[key] ?? ""
-  );
-
-  return result;
-}
 
 // ─── Route Handler ────────────────────────────────────────────────────
 
@@ -166,10 +139,18 @@ export async function POST(request: NextRequest) {
     job_title: jobTitle,
   };
 
-  const personaPrompt = injectPromptVariables(
-    promptEntry.system_prompt as string,
-    variables
-  );
+  let personaPrompt: string;
+  try {
+    personaPrompt = injectVariables(
+      promptEntry.system_prompt as string,
+      variables
+    );
+  } catch {
+    return apiError(
+      ERROR_CODES.AI_ERROR,
+      "Failed to assemble interview persona. Please try again."
+    );
+  }
 
   // Create an ElevenLabs Conversational AI agent
   let agentId: string;

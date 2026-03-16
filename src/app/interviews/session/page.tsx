@@ -26,7 +26,9 @@ import {
   Clock,
   Mic,
   MicOff,
+  Pause,
   PhoneOff,
+  Play,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────
@@ -46,13 +48,12 @@ interface TranscriptLine {
 // ─── ElevenLabs WebSocket Protocol ────────────────────────────────────
 
 /**
- * Plays a PCM 16-bit mono 16kHz audio buffer through the Web Audio API.
- * ElevenLabs sends audio as raw PCM 16-bit little-endian base64-encoded chunks.
+ * Scheduled audio playback queue.
+ * Sequences PCM chunks so they don't overlap during network bursts.
  */
-async function playPcmAudio(
-  audioCtx: AudioContext,
-  base64: string
-): Promise<void> {
+let audioScheduleTime = 0;
+
+function playPcmAudio(audioCtx: AudioContext, base64: string): void {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -74,7 +75,19 @@ async function playPcmAudio(
   const source = audioCtx.createBufferSource();
   source.buffer = buffer;
   source.connect(audioCtx.destination);
-  source.start();
+
+  // Schedule sequentially to prevent overlap
+  const now = audioCtx.currentTime;
+  const startTime = Math.max(now, audioScheduleTime);
+  source.start(startTime);
+  audioScheduleTime = startTime + buffer.duration;
+}
+
+/**
+ * Resets the audio schedule (e.g., on interruption).
+ */
+function resetAudioSchedule(): void {
+  audioScheduleTime = 0;
 }
 
 /**
@@ -149,7 +162,8 @@ function SessionContent() {
   const [timeRemaining, setTimeRemaining] = useState(durationMinutes * 60);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
-  const [sessionDurationSeconds, setSessionDurationSeconds] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [audioQualityWarning, setAudioQualityWarning] = useState(false);
 
   // Refs for WebSocket + audio
   const wsRef = useRef<WebSocket | null>(null);
@@ -161,6 +175,10 @@ function SessionContent() {
   const sessionDurationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const interruptIdRef = useRef<number>(0);
   const endCalledRef = useRef(false);
+  const sessionStateRef = useRef<SessionState>("connecting");
+  const sessionDurationRef = useRef(0);
+  const isPausedRef = useRef(false);
+  const silentFrameCountRef = useRef(0);
 
   // ─── Complete Session ──────────────────────────────────────────────
 
@@ -170,6 +188,7 @@ function SessionContent() {
       endCalledRef.current = true;
 
       setSessionState("ending");
+      sessionStateRef.current = "ending";
 
       // Stop all audio capture
       if (scriptProcessorRef.current) {
@@ -324,12 +343,14 @@ function SessionContent() {
 
     ws.onopen = () => {
       setSessionState("active");
+      sessionStateRef.current = "active";
 
       // Start countdown timer
       const totalSeconds = durationMinutes * 60;
       setTimeRemaining(totalSeconds);
 
       timerRef.current = setInterval(() => {
+        if (isPausedRef.current) return;
         setTimeRemaining((prev) => {
           if (prev <= 1) {
             clearInterval(timerRef.current!);
@@ -341,14 +362,20 @@ function SessionContent() {
         });
       }, 1000);
 
-      // Track session duration for the short-session check
+      // Track session duration for the short-session check (ref avoids stale closure)
       sessionDurationTimerRef.current = setInterval(() => {
-        setSessionDurationSeconds((prev) => prev + 1);
+        if (isPausedRef.current) return;
+        sessionDurationRef.current += 1;
       }, 1000);
 
       // Start capturing microphone and sending audio
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (ws.readyState !== WebSocket.OPEN) return;
+        // When paused, send silence (skip actual audio)
+        if (isPausedRef.current) {
+          setIsUserSpeaking(false);
+          return;
+        }
         const float32 = e.inputBuffer.getChannelData(0);
         // Downsample to 16kHz if AudioContext sample rate differs
         const pcm = downsampleTo16k(float32, audioCtx.sampleRate);
@@ -360,6 +387,18 @@ function SessionContent() {
         for (let i = 0; i < pcm.length; i++) sum += pcm[i] * pcm[i];
         const rms = Math.sqrt(sum / pcm.length);
         setIsUserSpeaking(rms > 0.01);
+
+        // Track consecutive silent frames — sustained silence may indicate audio issue
+        // Each frame is ~256ms at 16kHz/4096 buffer. 40 frames ≈ 10 seconds of silence
+        if (rms < 0.002) {
+          silentFrameCountRef.current += 1;
+          if (silentFrameCountRef.current >= 40) {
+            setAudioQualityWarning(true);
+          }
+        } else {
+          silentFrameCountRef.current = 0;
+          setAudioQualityWarning(false);
+        }
       };
 
       source.connect(processor);
@@ -382,10 +421,13 @@ function SessionContent() {
             | { audio_base_64: string; event_id: string }
             | undefined;
           if (!audioEvent) break;
-          if (parseInt(audioEvent.event_id) <= interruptIdRef.current) break;
+          const eventId = parseInt(audioEvent.event_id, 10);
+          if (isNaN(eventId) || eventId <= interruptIdRef.current) break;
+          // Skip playback when paused
+          if (isPausedRef.current) break;
           setIsAgentSpeaking(true);
           if (audioCtxRef.current) {
-            await playPcmAudio(audioCtxRef.current, audioEvent.audio_base_64);
+            playPcmAudio(audioCtxRef.current, audioEvent.audio_base_64);
           }
           // Reset agent speaking indicator after a short delay
           setTimeout(() => setIsAgentSpeaking(false), 500);
@@ -423,9 +465,13 @@ function SessionContent() {
             | { event_id: string }
             | undefined;
           if (interruptionEvent) {
-            interruptIdRef.current = parseInt(interruptionEvent.event_id);
+            const id = parseInt(interruptionEvent.event_id, 10);
+            if (!isNaN(id)) {
+              interruptIdRef.current = id;
+            }
           }
           setIsAgentSpeaking(false);
+          resetAudioSchedule();
           break;
         }
 
@@ -447,11 +493,12 @@ function SessionContent() {
     };
 
     ws.onerror = () => {
-      if (sessionState !== "ending" && sessionState !== "completed") {
+      if (sessionStateRef.current !== "ending" && sessionStateRef.current !== "completed") {
         setError(
           "The connection to your interviewer was interrupted. Please try again."
         );
         setSessionState("error");
+        sessionStateRef.current = "error";
       }
     };
 
@@ -466,7 +513,6 @@ function SessionContent() {
     difficulty,
     durationMinutes,
     completeSession,
-    sessionState,
   ]);
 
   // ─── Lifecycle: start session on mount ────────────────────────────
@@ -499,9 +545,25 @@ function SessionContent() {
 
   const handleEndEarly = useCallback(() => {
     if (!sessionId) return;
-    const isShortSession = sessionDurationSeconds < 120;
+    const isShortSession = sessionDurationRef.current < 120;
     completeSession(sessionId, isShortSession);
-  }, [sessionId, sessionDurationSeconds, completeSession]);
+  }, [sessionId, completeSession]);
+
+  // ─── Pause / Resume Handler ─────────────────────────────────────────
+
+  const handleTogglePause = useCallback(() => {
+    setIsPaused((prev) => {
+      const next = !prev;
+      isPausedRef.current = next;
+      // Mute/unmute microphone tracks
+      if (micStreamRef.current) {
+        micStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = !next;
+        });
+      }
+      return next;
+    });
+  }, []);
 
   // ─── Mic Permission Denied Screen ─────────────────────────────────
 
@@ -723,12 +785,23 @@ function SessionContent() {
 
         {/* Status label */}
         <p className="text-center text-sm text-text-secondary mb-2 min-h-[1.25rem]">
-          {isAgentSpeaking
-            ? "Interviewer is speaking..."
-            : isUserSpeaking
-              ? "Listening to you..."
-              : "Listening for your response"}
+          {isPaused
+            ? "Interview paused — press Resume to continue"
+            : isAgentSpeaking
+              ? "Interviewer is speaking..."
+              : isUserSpeaking
+                ? "Listening to you..."
+                : "Listening for your response"}
         </p>
+
+        {/* Audio quality warning */}
+        {audioQualityWarning && !isPaused && (
+          <div className="mb-4 rounded-md border border-[#D97706]/20 bg-[#D97706]/5 px-4 py-2 text-center">
+            <p className="text-xs text-[#D97706] font-medium">
+              Having trouble picking up your voice — try moving to a quieter environment
+            </p>
+          </div>
+        )}
 
         {/* Time warning */}
         {timeWarning && (
@@ -739,8 +812,30 @@ function SessionContent() {
           </div>
         )}
 
-        {/* End early button */}
-        <div className="flex justify-center mt-4">
+        {/* Pause / End early buttons */}
+        <div className="flex justify-center gap-3 mt-4">
+          <Button
+            variant="outline"
+            onClick={handleTogglePause}
+            className={cn(
+              "gap-2 transition-default",
+              isPaused
+                ? "border-primary text-primary hover:bg-primary/5"
+                : "border-border text-text-secondary hover:border-primary/40 hover:text-primary"
+            )}
+          >
+            {isPaused ? (
+              <>
+                <Play className="h-4 w-4" />
+                Resume
+              </>
+            ) : (
+              <>
+                <Pause className="h-4 w-4" />
+                Pause
+              </>
+            )}
+          </Button>
           <Button
             variant="outline"
             onClick={handleEndEarly}

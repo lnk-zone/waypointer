@@ -17,12 +17,13 @@ import {
 } from "@/lib/api/auth-middleware";
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
+import { createElevenLabsClient } from "@/lib/elevenlabs/client";
 import { z } from "zod";
 
 // ─── Request Validation ───────────────────────────────────────────────
 
 const completeSessionSchema = z.object({
-  transcript: z.string(),
+  transcript: z.string().min(1, "Transcript cannot be empty"),
 });
 
 // ─── Route Handler ────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ export async function POST(
   // Verify the session exists, belongs to the employee, and has not been completed yet
   const { data: session, error: sessionError } = await supabase
     .from("interview_sessions")
-    .select("id, employee_id, completed_at")
+    .select("id, employee_id, completed_at, elevenlabs_session_id")
     .eq("id", sessionId)
     .single();
 
@@ -117,6 +118,20 @@ export async function POST(
       ERROR_CODES.INTERNAL_ERROR,
       "Failed to complete interview session"
     );
+  }
+
+  // Clean up the ElevenLabs agent (fire-and-forget)
+  if (session.elevenlabs_session_id) {
+    try {
+      const elevenlabs = createElevenLabsClient();
+      Promise.resolve(
+        elevenlabs.conversationalAi.agents.delete(session.elevenlabs_session_id)
+      ).catch(() => {
+        // Swallow — agent cleanup is non-critical
+      });
+    } catch {
+      // Swallow — agent cleanup is non-critical
+    }
   }
 
   // Log activity (fire-and-forget)
