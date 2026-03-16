@@ -135,3 +135,37 @@ export const generateSingleRolePathSchema = z.object({
 export type RolePathOutput = z.infer<typeof rolePathSchema>;
 export type GenerateRolePathsOutput = z.infer<typeof generateRolePathsSchema>;
 export type GenerateSingleRolePathOutput = z.infer<typeof generateSingleRolePathSchema>;
+
+// ─── GENERATE_TRANSITION_PLAN (PR Prompt 5) ──────────────────────────
+
+export const dailyPlanSchema = z.object({
+  day: z.number().int().min(1).max(7),
+  tasks: z.array(z.string().min(1)).min(1),
+});
+
+export const timelineMilestoneSchema = z.object({
+  week: z.number().int().min(1),
+  milestone: z.string().min(1),
+  description: z.string().min(1),
+});
+
+export const readinessBreakdownSchema = z.object({
+  resume: z.number().int().min(0).max(100),
+  linkedin: z.number().int().min(0).max(100),
+  jobs: z.number().int().min(0).max(100),
+  outreach: z.number().int().min(0).max(100),
+  interviews: z.number().int().min(0).max(100),
+});
+
+export const generateTransitionPlanSchema = z.object({
+  search_strategy: z.string().min(1),
+  readiness_score: z.number().int().min(0).max(100),
+  readiness_breakdown: readinessBreakdownSchema,
+  first_week_plan: z.array(dailyPlanSchema).length(7),
+  suggested_timeline: z.array(timelineMilestoneSchema).min(3),
+});
+
+export type DailyPlan = z.infer<typeof dailyPlanSchema>;
+export type TimelineMilestone = z.infer<typeof timelineMilestoneSchema>;
+export type ReadinessBreakdown = z.infer<typeof readinessBreakdownSchema>;
+export type GenerateTransitionPlanOutput = z.infer<typeof generateTransitionPlanSchema>;

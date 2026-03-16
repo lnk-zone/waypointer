@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E5-02 (Role Path Selection, Custom Paths, and Regeneration)
-Currently working: E5-03 (Transition Plan Generation)
-Next up: E6-01
+Last completed: E5-03 (Transition Plan Generation)
+Currently working: E6-01 (Resume Builder — Tailored Resume Generation)
+Next up: E6-02
