@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E12-02 (Automated Email Triggers)
-Currently working: E13-01
-Next up: E13-02
+Last completed: E13-01 (Component Library)
+Currently working: E13-02 (Responsive Layouts)
+Next up: E14-01
