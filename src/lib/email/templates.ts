@@ -79,7 +79,13 @@ function baseLayout(content: string, data: EmailTemplateData): string {
           <tr>
             <td style="padding:32px 32px 0;text-align:center;">
               ${logoBlock}
-              <div style="font-size:16px;font-weight:600;color:${WAYPOINTER_BLUE};letter-spacing:0.5px;">WAYPOINTER</div>
+              <div style="text-align:center;">
+                <svg width="36" height="36" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:8px;">
+                  <rect width="48" height="48" rx="10.5" fill="#2563EB"/>
+                  <path d="M11 14L17.5 34L24 20L30.5 34L37 12" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span style="font-size:16px;font-weight:600;color:#2563EB;letter-spacing:0.5px;vertical-align:middle;">WAYPOINTER</span>
+              </div>
             </td>
           </tr>
           <!-- Custom message -->
