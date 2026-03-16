@@ -73,6 +73,7 @@ interface Milestone {
 }
 
 interface ProgressData {
+  current_week: number;
   resumes_completed: number;
   linkedin_updated: boolean;
   applications_tracked: number;
@@ -324,6 +325,126 @@ function StreakCounter({ days }: { days: number }) {
   );
 }
 
+// ─── Confidence Check-in ──────────────────────────────────────────────
+
+const CONFIDENCE_LABELS: Record<number, string> = {
+  1: "Not great",
+  2: "A bit low",
+  3: "Okay",
+  4: "Good",
+  5: "Confident",
+};
+
+function ConfidenceCheckin({
+  currentWeekScore,
+  onSubmit,
+}: {
+  currentWeekScore: number | null;
+  onSubmit: (score: number) => void;
+}) {
+  const [selectedScore, setSelectedScore] = useState<number | null>(
+    currentWeekScore
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [submitted, setSubmitted] = useState(currentWeekScore !== null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  if (dismissed || submitted) return null;
+
+  const handleSubmit = async () => {
+    if (!selectedScore || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/v1/employee/progress/confidence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ score: selectedScore }),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+        onSubmit(selectedScore);
+      } else {
+        setSubmitError("Could not save your check-in. Please try again.");
+      }
+    } catch {
+      setSubmitError("Could not save your check-in. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-medium text-text-primary">
+            Weekly Confidence Check-in
+          </h3>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-xs text-text-secondary hover:text-text-primary transition-default"
+        >
+          Skip
+        </button>
+      </div>
+      <p className="text-xs text-text-secondary mb-4">
+        How are you feeling about your job search this week?
+      </p>
+      <div className="flex items-center gap-2 mb-3">
+        {[1, 2, 3, 4, 5].map((score) => (
+          <button
+            key={score}
+            onClick={() => setSelectedScore(score)}
+            disabled={submitting}
+            className={cn(
+              "flex-1 flex flex-col items-center gap-1 rounded-lg border py-3 transition-all duration-200",
+              selectedScore === score
+                ? "border-primary bg-primary/10 shadow-sm"
+                : "border-border bg-surface hover:border-primary/40"
+            )}
+          >
+            <span
+              className={cn(
+                "text-lg font-semibold",
+                selectedScore === score
+                  ? "text-primary"
+                  : "text-text-secondary"
+              )}
+            >
+              {score}
+            </span>
+            <span
+              className={cn(
+                "text-[9px] leading-tight",
+                selectedScore === score
+                  ? "text-primary"
+                  : "text-text-secondary/70"
+              )}
+            >
+              {CONFIDENCE_LABELS[score]}
+            </span>
+          </button>
+        ))}
+      </div>
+      {submitError && (
+        <p className="text-xs text-[#DC2626] mb-2">{submitError}</p>
+      )}
+      <Button
+        onClick={handleSubmit}
+        disabled={!selectedScore || submitting}
+        size="sm"
+        className="w-full"
+      >
+        {submitting ? "Saving..." : "Submit Check-in"}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Progress Tracker Section ─────────────────────────────────────────
 
 function ProgressTracker() {
@@ -435,6 +556,38 @@ function ProgressTracker() {
 
       {/* Streak counter */}
       <StreakCounter days={data.current_streak_days} />
+
+      {/* Confidence check-in prompt (once per week) */}
+      <ConfidenceCheckin
+        currentWeekScore={
+          data.confidence_history.find(
+            (c) => c.week === data.current_week
+          )?.score ?? null
+        }
+        onSubmit={(score) => {
+          setData((prev) => {
+            if (!prev) return prev;
+            const existing = prev.confidence_history.find(
+              (c) => c.week === prev.current_week
+            );
+            if (existing) {
+              return {
+                ...prev,
+                confidence_history: prev.confidence_history.map((c) =>
+                  c.week === prev.current_week ? { ...c, score } : c
+                ),
+              };
+            }
+            return {
+              ...prev,
+              confidence_history: [
+                ...prev.confidence_history,
+                { week: prev.current_week, score },
+              ].sort((a, b) => a.week - b.week),
+            };
+          });
+        }}
+      />
 
       {/* Weekly activity chart */}
       {data.weekly_activity.length > 0 && (

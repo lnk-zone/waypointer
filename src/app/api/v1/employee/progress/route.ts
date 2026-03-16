@@ -137,6 +137,7 @@ export async function GET(request: NextRequest) {
     }
 
     const employee = rawEmployee as unknown as EmployeeRecord;
+    const currentWeek = getWeekNumber(employee.created_at);
 
     // Fetch all progress data in parallel
     const fourWeeksAgo = new Date(
@@ -338,6 +339,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: {
+        current_week: currentWeek,
         resumes_completed: resumesCompleted,
         linkedin_updated: linkedinUpdated,
         applications_tracked: applicationsTracked,
