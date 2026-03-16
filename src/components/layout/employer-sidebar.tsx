@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { WaypointerLogo } from "@/components/brand/logo";
 import {
   BarChart3,
   CreditCard,
@@ -32,11 +33,11 @@ export function EmployerSidebar() {
     >
       {/* Logo */}
       <div className="flex h-16 items-center px-4 md:px-6 border-b border-border">
-        <span className="hidden md:block text-[17px] font-semibold text-primary">
-          Waypointer
+        <span className="hidden md:block">
+          <WaypointerLogo size={28} variant="full" />
         </span>
-        <span className="block md:hidden text-[17px] font-semibold text-primary">
-          W
+        <span className="block md:hidden">
+          <WaypointerLogo size={28} variant="mark" />
         </span>
         <span className="hidden md:block ml-2 text-[10px] font-medium text-text-secondary bg-gray-100 rounded px-1.5 py-0.5">
           Admin

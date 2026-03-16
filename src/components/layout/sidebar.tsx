@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { WaypointerLogo } from "@/components/brand/logo";
 import {
   Home,
   FileText,
@@ -36,11 +37,11 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex h-16 items-center px-4 md:px-6 border-b border-border">
-        <span className="hidden md:block text-[17px] font-semibold text-primary">
-          Waypointer
+        <span className="hidden md:block">
+          <WaypointerLogo size={28} variant="full" />
         </span>
-        <span className="block md:hidden text-[17px] font-semibold text-primary">
-          W
+        <span className="block md:hidden">
+          <WaypointerLogo size={28} variant="mark" />
         </span>
       </div>
 
