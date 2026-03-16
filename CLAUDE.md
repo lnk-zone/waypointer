@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E10-01 (Weekly Plan Generation)
-Currently working: E10-02 (Progress Tracker Dashboard)
-Next up: E10-03
+Last completed: E10-02 (Progress Tracker Dashboard)
+Currently working: E10-03 (Confidence Check-ins)
+Next up: E11-01
