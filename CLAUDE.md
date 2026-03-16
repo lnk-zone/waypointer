@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E6-04 (LinkedIn Optimizer)
-Currently working: E7-01 (Job Data Provider Integration)
-Next up: E7-02
+Last completed: E7-01 (Job Data Provider Integration)
+Currently working: E7-02 (Job Matching and Scoring)
+Next up: E7-03
