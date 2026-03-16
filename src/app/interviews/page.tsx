@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { EmployeeRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,8 @@ const DIFFICULTY_OPTIONS = [
 // ─── Component ────────────────────────────────────────────────────────
 
 function InterviewsContent() {
+  const router = useRouter();
+
   // Role paths
   const [paths, setPaths] = useState<RolePath[]>([]);
   const [selectedPathId, setSelectedPathId] = useState<string>("");
@@ -437,6 +440,17 @@ function InterviewsContent() {
           onChangeDuration={setInterviewDuration}
           onChangeDifficulty={setInterviewDifficulty}
           onClose={() => setShowModal(false)}
+          onBegin={() => {
+            const params = new URLSearchParams();
+            params.set("path_id", selectedPathId);
+            params.set("format", interviewFormat);
+            params.set("difficulty", interviewDifficulty);
+            params.set("duration", String(interviewDuration));
+            if (interviewType === "company" && interviewJobId) {
+              params.set("job_match_id", interviewJobId);
+            }
+            router.push(`/interviews/session?${params.toString()}`);
+          }}
         />
       )}
     </div>
@@ -530,6 +544,7 @@ function MockInterviewModal({
   onChangeDuration,
   onChangeDifficulty,
   onClose,
+  onBegin,
 }: {
   paths: RolePath[];
   selectedPathId: string;
@@ -545,6 +560,7 @@ function MockInterviewModal({
   onChangeDuration: (v: number) => void;
   onChangeDifficulty: (v: string) => void;
   onClose: () => void;
+  onBegin: () => void;
 }) {
   const selectedPath = paths.find((p) => p.id === selectedPathId);
 
@@ -718,17 +734,15 @@ function MockInterviewModal({
 
         {/* Begin button */}
         <Button
-          onClick={onClose}
+          onClick={onBegin}
           className="w-full mt-6 gap-2"
-          disabled={
-            interviewType === "company" && !interviewJobId
-          }
+          disabled={interviewType === "company" && !interviewJobId}
         >
           <Mic className="h-4 w-4" />
           Begin Interview
         </Button>
         <p className="text-[10px] text-text-secondary text-center mt-2">
-          Voice interview sessions are being configured
+          Microphone access will be requested when the session starts
         </p>
       </div>
     </div>
