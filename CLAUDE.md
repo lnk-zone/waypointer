@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E11-05 (Transition Outcomes and Exports)
-Currently working: E12-01
-Next up: E12-02
+Last completed: E12-01 (Email Templates and Sending)
+Currently working: E12-02 (Automated Email Triggers)
+Next up: E13-01
