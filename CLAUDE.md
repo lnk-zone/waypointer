@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E10-02 (Progress Tracker Dashboard)
-Currently working: E10-03 (Confidence Check-ins)
-Next up: E11-01
+Last completed: E10-03 (Confidence Check-ins)
+Currently working: E11-01 (Company Setup)
+Next up: E11-02
