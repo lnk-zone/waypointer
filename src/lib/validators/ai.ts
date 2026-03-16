@@ -364,3 +364,30 @@ export const analyzeInterviewSchema = z.object({
 export type AnswerAnalysis = z.infer<typeof answerAnalysisSchema>;
 export type WeakAnswer = z.infer<typeof weakAnswerSchema>;
 export type AnalyzeInterviewOutput = z.infer<typeof analyzeInterviewSchema>;
+
+// ─── GENERATE_WEEKLY_PLAN (PR Prompt 15) ────────────────────────────
+
+export const weeklyPlanItemSchema = z.object({
+  description: z.string().min(1),
+  category: z.enum([
+    "resume",
+    "jobs",
+    "outreach",
+    "interviews",
+    "linkedin",
+    "other",
+  ]),
+  priority: z.enum(["high", "medium", "low"]),
+  estimated_minutes: z.number().int().min(1),
+});
+
+export const generateWeeklyPlanSchema = z.object({
+  items: z.array(weeklyPlanItemSchema).min(3).max(8),
+  week_focus: z.string().min(1),
+  encouragement: z.string().min(1),
+});
+
+export type WeeklyPlanItem = z.infer<typeof weeklyPlanItemSchema>;
+export type GenerateWeeklyPlanOutput = z.infer<
+  typeof generateWeeklyPlanSchema
+>;
