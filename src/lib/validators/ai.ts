@@ -229,3 +229,22 @@ export const scoreResumeSchema = z.object({
 export type MissingMetric = z.infer<typeof missingMetricSchema>;
 export type WeakBullet = z.infer<typeof weakBulletSchema>;
 export type ScoreResumeOutput = z.infer<typeof scoreResumeSchema>;
+
+// ─── GENERATE_LINKEDIN (PR Prompt 8) ─────────────────────────────────
+
+export const linkedinExperienceBulletSchema = z.object({
+  role: z.string().min(1),
+  bullets: z.array(z.string().min(1)).min(1),
+});
+
+export const generateLinkedInSchema = z.object({
+  headline: z.string().min(1).max(220),
+  about_section: z.string().min(1),
+  experience_bullets: z.array(linkedinExperienceBulletSchema).min(1),
+  featured_suggestions: z.array(z.string().min(1)),
+  skill_recommendations: z.array(z.string().min(1)),
+  open_to_work_guidance: z.string().min(1),
+  recruiter_tips: z.string().min(1),
+});
+
+export type GenerateLinkedInOutput = z.infer<typeof generateLinkedInSchema>;

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   Home,
   FileText,
+  Linkedin,
   Briefcase,
   Send,
   Mic,
@@ -15,6 +16,7 @@ import {
 const NAV_ITEMS = [
   { label: "Home", href: "/dashboard", Icon: Home },
   { label: "Resumes", href: "/resumes", Icon: FileText },
+  { label: "LinkedIn", href: "/linkedin", Icon: Linkedin },
   { label: "Jobs", href: "/jobs", Icon: Briefcase },
   { label: "Outreach", href: "/outreach", Icon: Send },
   { label: "Interviews", href: "/interviews", Icon: Mic },
@@ -55,7 +57,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium transition-default",
                 "md:px-3 justify-center md:justify-start",
                 isActive
-                  ? "bg-[#DBEAFE] text-primary border-l-2 border-primary"
+                  ? "bg-primary-light text-primary border-l-2 border-primary"
                   : "text-text-secondary hover:bg-background hover:text-text-primary"
               )}
             >
