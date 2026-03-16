@@ -236,7 +236,7 @@ function DashboardContent() {
 
       const json = await res.json();
       setReengageResult(
-        `${json.data.emails_sent} re-engagement email${json.data.emails_sent !== 1 ? "s" : ""} sent`
+        `${json.data.sent} re-engagement email${json.data.sent !== 1 ? "s" : ""} sent`
       );
       setReengageSuccess(true);
     } catch {

@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E13-03 (Empty, Loading, and Error States)
-Currently working: E14-01
-Next up: E14-02
+Last completed: E14-01 (End-to-End Flow Testing)
+Currently working: E14-02
+Next up: E14-03
