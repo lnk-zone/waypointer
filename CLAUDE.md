@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E10-03 (Confidence Check-ins)
-Currently working: E11-01 (Company Setup)
-Next up: E11-02
+Last completed: E11-01 (Company Setup)
+Currently working: E11-02 (Program Settings)
+Next up: E11-03
