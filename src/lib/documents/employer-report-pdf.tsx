@@ -21,6 +21,7 @@ import {
   Font,
   Svg,
   Rect,
+  Path,
 } from "@react-pdf/renderer";
 
 // ─── Register Inter font ─────────────────────────────────────────────
@@ -269,6 +270,16 @@ export function EmployerReportPDF({ data }: { data: EmployerReportData }) {
               style={{ width: 80, height: 80, marginBottom: 24, objectFit: "contain" }}
             />
           ) : null}
+          <Svg width={56} height={56} viewBox="0 0 48 48" style={{ marginBottom: 12 }}>
+            <Rect width="48" height="48" rx={10.5} fill="#2563EB" />
+            <Path
+              d="M11 14L17.5 34L24 20L30.5 34L37 12"
+              stroke="white"
+              strokeWidth={3.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
           <Text style={styles.coverBrand}>WAYPOINTER</Text>
           <Text style={styles.coverTitle}>Transition Support Summary</Text>
           <Text style={styles.coverSubtitle}>{data.companyName}</Text>
