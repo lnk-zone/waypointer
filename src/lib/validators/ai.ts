@@ -272,3 +272,26 @@ export const scoreJobBatchSchema = z.object({
 
 export type ScoredJob = z.infer<typeof scoredJobSchema>;
 export type ScoreJobBatchOutput = z.infer<typeof scoreJobBatchSchema>;
+
+// ─── GENERATE_APPLICATION_KIT (PR Prompt 10) ────────────────────────
+
+export const resumeEditSchema = z.object({
+  section: z.string().min(1),
+  current_text: z.string().min(1),
+  suggested_edit: z.string().min(1),
+  reason: z.string().min(1),
+});
+
+export const generateApplicationKitSchema = z.object({
+  intro_paragraph: z.string().min(1),
+  recruiter_message: z.string().min(1),
+  hiring_manager_message: z.string().min(1),
+  referral_request: z.string().min(1),
+  resume_edits: z.array(resumeEditSchema),
+  interview_themes: z.array(z.string().min(1)),
+});
+
+export type ResumeEditItem = z.infer<typeof resumeEditSchema>;
+export type GenerateApplicationKitOutput = z.infer<
+  typeof generateApplicationKitSchema
+>;

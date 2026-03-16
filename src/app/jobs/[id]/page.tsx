@@ -14,11 +14,16 @@ import {
   Building2,
   Check,
   CheckCircle2,
+  ClipboardCopy,
   ExternalLink,
   FileText,
+  Lightbulb,
   MapPin,
+  MessageSquare,
   Package,
+  Pencil,
   Shield,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 
@@ -54,6 +59,27 @@ interface JobMatchDetail {
   job_listings: JobListing;
 }
 
+interface ResumeEdit {
+  section: string;
+  current_text: string;
+  suggested_edit: string;
+  reason: string;
+}
+
+interface ApplicationKit {
+  id: string;
+  job_match_id: string;
+  intro_paragraph: string;
+  recruiter_message: string;
+  hiring_manager_message: string;
+  referral_request: string;
+  resume_edits: ResumeEdit[];
+  interview_themes: string[];
+  resume_recommendation?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────
 
 const FIT_CONFIG = {
@@ -87,6 +113,12 @@ function JobDetailContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trackStatus, setTrackStatus] = useState<"idle" | "saving" | "saved" | "applied">("idle");
+
+  // Application kit state
+  const [kit, setKit] = useState<ApplicationKit | null>(null);
+  const [kitLoading, setKitLoading] = useState(false);
+  const [kitError, setKitError] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Fetch job match detail via single-match lookup
   const fetchDetail = useCallback(async () => {
@@ -134,6 +166,46 @@ function JobDetailContent() {
       }
     } catch {
       setTrackStatus("idle");
+    }
+  };
+
+  // Generate or fetch application kit
+  const handleGenerateKit = async () => {
+    if (!match) return;
+    setKitLoading(true);
+    setKitError(null);
+
+    try {
+      const res = await fetch(`/api/v1/employee/jobs/${match.id}/kit`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => null);
+        throw new Error(
+          errorJson?.error?.message ?? "Failed to generate application kit"
+        );
+      }
+
+      const json = await res.json();
+      setKit(json.data as ApplicationKit);
+    } catch (err) {
+      setKitError(
+        err instanceof Error ? err.message : "Failed to generate application kit"
+      );
+    } finally {
+      setKitLoading(false);
+    }
+  };
+
+  // Copy to clipboard
+  const handleCopy = async (text: string, fieldName: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      // Clipboard API not available
     }
   };
 
@@ -474,22 +546,189 @@ function JobDetailContent() {
             </Button>
           </div>
 
-          {/* Application Kit placeholder — E7-04 will implement the generation */}
+          {/* Application Kit */}
           <div className="rounded-md border border-border bg-surface p-6">
             <h2 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
               <Package className="h-4 w-4 text-primary" />
               Application Kit
             </h2>
-            <div className="rounded-sm bg-primary-light p-4 text-center">
-              <Package className="h-8 w-8 text-primary mx-auto mb-2" />
-              <p className="text-sm font-medium text-text-primary mb-1">
-                Application kit coming soon
-              </p>
-              <p className="text-xs text-text-secondary">
-                Tailored intro paragraphs, outreach messages, and interview
-                prep will be generated here for this specific job.
-              </p>
-            </div>
+
+            {/* Kit not yet generated — show generate button */}
+            {!kit && !kitLoading && !kitError && (
+              <div className="rounded-sm bg-primary-light p-4 text-center">
+                <Sparkles className="h-8 w-8 text-primary mx-auto mb-2" />
+                <p className="text-sm font-medium text-text-primary mb-1">
+                  Generate your application kit
+                </p>
+                <p className="text-xs text-text-secondary mb-3">
+                  Tailored intro paragraph, outreach messages, and interview
+                  prep for this specific job.
+                </p>
+                <Button size="sm" onClick={handleGenerateKit} className="gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Generate Kit
+                </Button>
+              </div>
+            )}
+
+            {/* Kit loading */}
+            {kitLoading && (
+              <div className="space-y-3">
+                <div className="rounded-sm bg-primary-light p-4 text-center">
+                  <Sparkles className="h-6 w-6 text-primary mx-auto mb-2 animate-pulse" />
+                  <p className="text-sm font-medium text-primary">
+                    Building your tailored application kit...
+                  </p>
+                  <p className="text-xs text-text-secondary mt-1">
+                    This usually takes 15–30 seconds.
+                  </p>
+                </div>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="h-4 w-28 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                    <div className="h-16 w-full animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Kit error */}
+            {kitError && (
+              <div className="rounded-sm border border-[#DC2626]/20 bg-[#DC2626]/5 p-4">
+                <p className="text-sm text-[#DC2626] font-medium mb-2">
+                  Failed to generate application kit
+                </p>
+                <p className="text-xs text-text-secondary mb-3">{kitError}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGenerateKit}
+                >
+                  Try Again
+                </Button>
+              </div>
+            )}
+
+            {/* Kit generated — show content */}
+            {kit && !kitLoading && (
+              <div className="space-y-4">
+                {/* Resume recommendation if no resume */}
+                {kit.resume_recommendation && (
+                  <div className="rounded-sm border border-[#D97706]/20 bg-[#D97706]/5 p-3">
+                    <p className="text-xs text-[#D97706] font-medium mb-1">
+                      Resume Not Found
+                    </p>
+                    <p className="text-xs text-text-secondary">
+                      {kit.resume_recommendation}
+                    </p>
+                    <Link
+                      href="/resumes"
+                      className="text-xs font-medium text-primary hover:underline mt-1 inline-block"
+                    >
+                      Build Resume →
+                    </Link>
+                  </div>
+                )}
+
+                {/* Intro paragraph */}
+                <KitSection
+                  label="Cover Note"
+                  icon={<FileText className="h-3.5 w-3.5" />}
+                  text={kit.intro_paragraph}
+                  fieldName="intro_paragraph"
+                  copiedField={copiedField}
+                  onCopy={handleCopy}
+                />
+
+                {/* Recruiter message */}
+                <KitSection
+                  label="Recruiter Message"
+                  icon={<MessageSquare className="h-3.5 w-3.5" />}
+                  text={kit.recruiter_message}
+                  fieldName="recruiter_message"
+                  copiedField={copiedField}
+                  onCopy={handleCopy}
+                  hint="Under 300 characters — ideal for LinkedIn"
+                />
+
+                {/* Hiring manager message */}
+                <KitSection
+                  label="Hiring Manager Message"
+                  icon={<MessageSquare className="h-3.5 w-3.5" />}
+                  text={kit.hiring_manager_message}
+                  fieldName="hiring_manager_message"
+                  copiedField={copiedField}
+                  onCopy={handleCopy}
+                />
+
+                {/* Referral request */}
+                <KitSection
+                  label="Referral Request"
+                  icon={<MessageSquare className="h-3.5 w-3.5" />}
+                  text={kit.referral_request}
+                  fieldName="referral_request"
+                  copiedField={copiedField}
+                  onCopy={handleCopy}
+                  hint="For a mutual connection at the company"
+                />
+
+                {/* Resume edits */}
+                {kit.resume_edits && kit.resume_edits.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Pencil className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-xs font-medium text-text-primary">
+                        Suggested Resume Edits
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {kit.resume_edits.map((edit, i) => (
+                        <div
+                          key={i}
+                          className="rounded-sm bg-background p-3 text-xs space-y-1"
+                        >
+                          <span className="inline-block rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium">
+                            {edit.section}
+                          </span>
+                          <p className="text-text-secondary line-through">
+                            {edit.current_text}
+                          </p>
+                          <p className="text-text-primary font-medium">
+                            {edit.suggested_edit}
+                          </p>
+                          <p className="text-text-secondary italic">
+                            {edit.reason}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Interview themes */}
+                {kit.interview_themes && kit.interview_themes.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Lightbulb className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-xs font-medium text-text-primary">
+                        Likely Interview Topics
+                      </p>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {kit.interview_themes.map((theme, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-2 text-xs text-text-secondary"
+                        >
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                          {theme}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Resume recommendation */}
@@ -509,6 +748,59 @@ function JobDetailContent() {
             </Link>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Kit Section Subcomponent ──────────────────────────────────────────
+
+function KitSection({
+  label,
+  icon,
+  text,
+  fieldName,
+  copiedField,
+  onCopy,
+  hint,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  text: string;
+  fieldName: string;
+  copiedField: string | null;
+  onCopy: (text: string, fieldName: string) => void;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-primary">{icon}</span>
+          <p className="text-xs font-medium text-text-primary">{label}</p>
+        </div>
+        <button
+          onClick={() => onCopy(text, fieldName)}
+          className="flex items-center gap-1 text-[10px] text-text-secondary hover:text-primary transition-default"
+        >
+          {copiedField === fieldName ? (
+            <>
+              <CheckCircle2 className="h-3 w-3 text-[#059669]" />
+              Copied
+            </>
+          ) : (
+            <>
+              <ClipboardCopy className="h-3 w-3" />
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+      {hint && (
+        <p className="text-[10px] text-text-secondary mb-1.5">{hint}</p>
+      )}
+      <div className="rounded-sm bg-background p-3 text-sm text-text-primary leading-relaxed">
+        {text}
       </div>
     </div>
   );
