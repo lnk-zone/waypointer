@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 
+type UserRole = "employee" | "employer_admin" | "new_user";
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole: "employee" | "employer_admin";
+  allowedRoles: UserRole[];
 }
 
 /**
@@ -15,7 +17,7 @@ interface ProtectedRouteProps {
  * Redirects unauthenticated users to /login.
  * Redirects users with the wrong role to their correct dashboard.
  */
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const router = useRouter();
   const { setUser, setLoading, isLoading } = useAuthStore();
   const [authorized, setAuthorized] = useState(false);
@@ -55,12 +57,14 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
         const data = await res.json();
 
-        if (data.role !== requiredRole) {
+        if (!allowedRoles.includes(data.role)) {
           // Redirect to the correct dashboard
           if (data.role === "employee") {
             router.replace("/dashboard");
           } else if (data.role === "employer_admin") {
             router.replace("/employer/dashboard");
+          } else if (data.role === "new_user") {
+            router.replace("/employer/setup");
           }
           setLoading(false);
           return;
@@ -76,7 +80,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     }
 
     checkAuth();
-  }, [requiredRole, router, setUser, setLoading]);
+  }, [allowedRoles, router, setUser, setLoading]);
 
   if (isLoading || !authorized) {
     return (
@@ -104,7 +108,9 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
  * Wrapper for employee-only pages.
  */
 export function EmployeeRoute({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute requiredRole="employee">{children}</ProtectedRoute>;
+  return (
+    <ProtectedRoute allowedRoles={["employee"]}>{children}</ProtectedRoute>
+  );
 }
 
 /**
@@ -112,6 +118,19 @@ export function EmployeeRoute({ children }: { children: React.ReactNode }) {
  */
 export function EmployerRoute({ children }: { children: React.ReactNode }) {
   return (
-    <ProtectedRoute requiredRole="employer_admin">{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={["employer_admin"]}>
+      {children}
+    </ProtectedRoute>
+  );
+}
+
+/**
+ * Wrapper for employer setup page — allows both new users and existing admins.
+ */
+export function EmployerSetupRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute allowedRoles={["employer_admin", "new_user"]}>
+      {children}
+    </ProtectedRoute>
   );
 }

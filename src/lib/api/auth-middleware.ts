@@ -3,7 +3,7 @@ import { createAnonClient, createServerComponentClient, createServiceClient } fr
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import type { User } from "@supabase/supabase-js";
 
-export type UserRole = "employee" | "employer_admin";
+export type UserRole = "employee" | "employer_admin" | "new_user";
 
 export interface AuthContext {
   user: User;
@@ -98,7 +98,11 @@ export async function authenticateRequest(
     };
   }
 
-  return apiError(ERROR_CODES.UNAUTHORIZED, "No profile found for this user");
+  // Authenticated but no profile — new user who hasn't completed setup
+  return {
+    user,
+    role: "new_user",
+  };
 }
 
 /**
