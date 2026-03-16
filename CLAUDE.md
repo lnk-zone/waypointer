@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E8-01 (Outreach Message Generation)
-Currently working: E8-02 (Outreach Tracking)
-Next up: E9-01
+Last completed: E8-02 (Outreach Tracking)
+Currently working: E9-01 (Interview Prep Hub)
+Next up: E9-02
