@@ -15,5 +15,13 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const signupSchema = z.object({
+  full_name: z.string().min(1, "Full name is required").max(200),
+  email: z.string().email("Valid email is required"),
+  company_name: z.string().min(1, "Company name is required").max(200),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+});
+
 export type ActivateEmployeeInput = z.infer<typeof activateEmployeeSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type SignupInput = z.infer<typeof signupSchema>;
