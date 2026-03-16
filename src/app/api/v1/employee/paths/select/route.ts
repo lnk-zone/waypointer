@@ -2,7 +2,7 @@
  * POST /api/v1/employee/paths/select
  *
  * Persists the employee's role path selections (primary + secondary).
- * Clears existing selections, then marks the specified paths.
+ * Uses an atomic RPC function to clear and set selections in one transaction.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -57,42 +57,29 @@ export async function POST(request: NextRequest) {
     return apiError(ERROR_CODES.NOT_FOUND, "Employee profile not found");
   }
 
-  // Clear all existing selections for this employee
-  const { error: clearError } = await supabase
-    .from("role_paths")
-    .update({ is_primary: false, is_selected: false, updated_at: new Date().toISOString() })
-    .eq("employee_id", employee.id);
-
-  if (clearError) {
-    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to clear existing selections");
-  }
-
-  // Set primary path
-  const { error: primaryError } = await supabase
-    .from("role_paths")
-    .update({ is_primary: true, is_selected: true, updated_at: new Date().toISOString() })
-    .eq("id", primary_path_id)
-    .eq("employee_id", employee.id);
-
-  if (primaryError) {
-    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to set primary path");
-  }
-
-  // Set secondary paths
-  if (secondary_path_ids.length > 0) {
-    const { error: secondaryError } = await supabase
-      .from("role_paths")
-      .update({ is_selected: true, updated_at: new Date().toISOString() })
-      .in("id", secondary_path_ids)
-      .eq("employee_id", employee.id);
-
-    if (secondaryError) {
-      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to set secondary paths");
+  // Atomically clear and set selections via RPC
+  const { data: updatedCount, error: rpcError } = await supabase.rpc(
+    "select_role_paths",
+    {
+      p_employee_id: employee.id,
+      p_primary_path_id: primary_path_id,
+      p_secondary_path_ids: secondary_path_ids,
     }
+  );
+
+  if (rpcError) {
+    // RPC raises P0002 when path IDs don't belong to the employee
+    if (rpcError.message.includes("not found for this employee")) {
+      return apiError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "One or more selected paths were not found"
+      );
+    }
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save selections");
   }
 
   return NextResponse.json({
     paths_selected: true,
-    selected_count: 1 + secondary_path_ids.length,
+    selected_count: updatedCount ?? (1 + secondary_path_ids.length),
   });
 }

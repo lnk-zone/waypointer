@@ -302,12 +302,18 @@ export function parseStructuredOutput<T>(
  *
  * Implements retry on malformed output (once) with a correction nudge per MP §6.
  * Enforces max 5 concurrent calls per session.
+ *
+ * Options:
+ * - userPromptOverride: If provided, uses this string as the user prompt instead
+ *   of injecting variables into the prompt registry template. Useful when the
+ *   user prompt needs a different structure (e.g., custom path generation).
  */
 export async function executeAIPipeline<T>(
   promptId: string,
   variables: Record<string, string>,
   outputSchema: ZodType<T>,
-  sessionId: string = "default"
+  sessionId: string = "default",
+  options?: { userPromptOverride?: string }
 ): Promise<T> {
   // Enforce concurrency limit
   if (!acquireConcurrencySlot(sessionId)) {
@@ -325,8 +331,10 @@ export async function executeAIPipeline<T>(
     // Step 1: Fetch prompt from registry
     const prompt = await fetchPrompt(promptId);
 
-    // Step 2: Inject variables into user prompt template
-    const userPrompt = injectVariables(prompt.user_prompt_template, variables);
+    // Step 2: Inject variables into user prompt template (or use override)
+    const userPrompt = options?.userPromptOverride
+      ? options.userPromptOverride
+      : injectVariables(prompt.user_prompt_template, variables);
 
     // Step 3: Build model config
     const config: AIModelConfig = {

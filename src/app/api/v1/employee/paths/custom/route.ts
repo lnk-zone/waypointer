@@ -16,10 +16,8 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import {
-  fetchPrompt,
   injectVariables,
-  callClaude,
-  parseStructuredOutput,
+  executeAIPipeline,
 } from "@/lib/ai/pipeline";
 import { generateSingleRolePathSchema } from "@/lib/validators/ai";
 import {
@@ -27,7 +25,6 @@ import {
   assemblePathContext,
 } from "@/lib/api/paths-helpers";
 import { z } from "zod";
-import type { AIModelConfig } from "@/types/ai";
 
 export const runtime = "edge";
 
@@ -62,6 +59,13 @@ export async function POST(request: NextRequest) {
   const supabase = createServiceClient();
   const { title } = parsed.data;
 
+  // Sanitize title: strip any Handlebars-style template syntax to prevent
+  // interference with variable injection
+  const sanitizedTitle = title.replace(/\{\{.*?\}\}/g, "").trim();
+  if (!sanitizedTitle) {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid role title");
+  }
+
   // Get employee and validated snapshot
   const { employee, snapshotId, error: contextError } =
     await getEmployeeAndSnapshot(supabase, auth.user.id);
@@ -77,15 +81,12 @@ export async function POST(request: NextRequest) {
   // Assemble context for AI
   const { variables } = await assemblePathContext(supabase, employee, snapshotId);
 
-  // Fetch the GENERATE_ROLE_PATHS prompt for its system prompt and config
-  const prompt = await fetchPrompt("GENERATE_ROLE_PATHS");
-
   // Build a custom user prompt for a single role analysis
   // Note: We use string concatenation for the title to avoid ${{ being parsed
   // as a template literal expression when mixed with Handlebars {{variables}}
   const customUserTemplate =
     "Analyze this specific target role for this candidate and generate a detailed assessment.\n\n" +
-    "Target role: " + title + "\n\n" +
+    "Target role: " + sanitizedTitle + "\n\n" +
     "Career snapshot:\n---\n{{career_snapshot_json}}\n---\n\n" +
     "Preferences:\n" +
     "- Seniority: {{seniority}}\n" +
@@ -116,15 +117,16 @@ export async function POST(request: NextRequest) {
 
   const customUserPrompt = injectVariables(customUserTemplate, variables);
 
-  const config: AIModelConfig = {
-    model: prompt.model,
-    maxTokens: prompt.max_tokens,
-    temperature: prompt.temperature,
-  };
-
   try {
-    const response = await callClaude(prompt.system_prompt, customUserPrompt, config);
-    const result = parseStructuredOutput(response.text, generateSingleRolePathSchema);
+    // Use executeAIPipeline with userPromptOverride to get full retry,
+    // concurrency limiting, and logging while using our custom prompt
+    const result = await executeAIPipeline(
+      "GENERATE_ROLE_PATHS",
+      variables,
+      generateSingleRolePathSchema,
+      auth.user.id,
+      { userPromptOverride: customUserPrompt }
+    );
 
     // Get the current max sort_order for this employee
     const { data: existingPaths } = await supabase

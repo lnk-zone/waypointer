@@ -521,7 +521,7 @@ function PathsContent() {
 
   // ─── Error State ─────────────────────────────────────────────────────
 
-  if (error && !loading) {
+  if (error && !loading && paths.length === 0) {
     return (
       <div className="flex min-h-screen flex-col bg-background animate-fade-in">
         <header className="flex w-full items-center justify-center px-6 pt-12 pb-4">
@@ -678,6 +678,21 @@ function PathsContent() {
               Select at least one to build your search plan.
             </p>
           </div>
+
+          {/* Inline error banner (shown when paths exist but an action fails) */}
+          {error && (
+            <div className="flex items-center gap-3 rounded-md border border-danger/20 bg-danger/5 px-4 py-3">
+              <AlertCircle className="h-4 w-4 shrink-0 text-danger" />
+              <p className="flex-1 text-sm text-danger">{error}</p>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-sm font-medium text-danger hover:text-danger/80 transition-default"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* Role path cards */}
           <div className="space-y-4">

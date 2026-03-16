@@ -187,12 +187,13 @@ When all three gates pass for an issue, before advancing you must:
    - Set "Currently working" to the next issue in the critical path
    - Set "Next up" to the issue after that
 3. Save the file
-4. Proceed to the next issue
+4. Commit all changes and push to the `origin` remote
+5. Proceed to the next issue
 
 ---
 
 ## Current Status
 
-Last completed: E5-01 (Role Path Generation)
-Currently working: E5-02 (Role Path Selection, Custom Paths, and Regeneration)
-Next up: E5-03
+Last completed: E5-02 (Role Path Selection, Custom Paths, and Regeneration)
+Currently working: E5-03 (Transition Plan Generation)
+Next up: E6-01

@@ -106,22 +106,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Delete existing non-custom, non-selected paths (keep custom and selected)
-  const { error: deleteError } = await supabase
-    .from("role_paths")
-    .delete()
-    .eq("employee_id", employee.id)
-    .eq("is_custom", false)
-    .eq("is_selected", false);
-
-  if (deleteError) {
-    return apiError(
-      ERROR_CODES.INTERNAL_ERROR,
-      "Failed to clear previous role paths"
-    );
-  }
-
-  // Get the current max sort_order for this employee
+  // Get the current max sort_order before modifying paths
   const { data: existingPaths } = await supabase
     .from("role_paths")
     .select("sort_order")
@@ -131,7 +116,8 @@ export async function POST(request: NextRequest) {
 
   const startSortOrder = (existingPaths?.[0]?.sort_order ?? -1) + 1;
 
-  // Persist the 3 regenerated paths
+  // Insert new paths first (before deleting old ones) to avoid data loss
+  // if the insert fails
   const rows = aiResult.paths.map((path, index) => ({
     employee_id: employee.id,
     title: path.title,
@@ -163,6 +149,15 @@ export async function POST(request: NextRequest) {
       "Failed to save regenerated role paths"
     );
   }
+
+  // Delete old non-custom, non-selected paths now that new ones are saved
+  await supabase
+    .from("role_paths")
+    .delete()
+    .eq("employee_id", employee.id)
+    .eq("is_custom", false)
+    .eq("is_selected", false)
+    .not("id", "in", `(${insertedPaths.map((p) => p.id).join(",")})`);
 
   // Return all current paths (custom + selected + new) for full UI refresh
   const { data: allPaths, error: allError } = await supabase
