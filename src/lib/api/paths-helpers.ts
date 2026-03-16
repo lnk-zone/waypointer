@@ -37,7 +37,7 @@ export async function assemblePathContext(
     await Promise.all([
       supabase
         .from("work_history")
-        .select("company, title, start_date, end_date, duration_months")
+        .select("company, title, start_date, end_date, duration_months, description")
         .eq("snapshot_id", snapshotId)
         .order("sort_order", { ascending: true }),
       supabase

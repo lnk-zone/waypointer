@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E5-03 (Transition Plan Generation)
-Currently working: E6-01 (Resume Builder — Tailored Resume Generation)
-Next up: E6-02
+Last completed: E6-01 (Resume Generation)
+Currently working: E6-02 (Resume Workspace Screen)
+Next up: E6-03

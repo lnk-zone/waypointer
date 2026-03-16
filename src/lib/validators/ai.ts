@@ -169,3 +169,63 @@ export type DailyPlan = z.infer<typeof dailyPlanSchema>;
 export type TimelineMilestone = z.infer<typeof timelineMilestoneSchema>;
 export type ReadinessBreakdown = z.infer<typeof readinessBreakdownSchema>;
 export type GenerateTransitionPlanOutput = z.infer<typeof generateTransitionPlanSchema>;
+
+// ─── GENERATE_RESUME (PR Prompt 6) ──────────────────────────────────
+
+export const resumeExperienceEntrySchema = z.object({
+  company: z.string().min(1),
+  title: z.string().min(1),
+  dates: z.string().min(1),
+  bullets: z.array(z.string().min(1)).min(1),
+});
+
+export const resumeEducationEntrySchema = z.object({
+  institution: z.string().min(1),
+  degree: z.string().nullable(),
+  field: z.string().nullable(),
+  year: z.string().nullable(),
+});
+
+export const generateResumeSchema = z.object({
+  summary_statement: z.string().min(1),
+  skills_section: z.array(z.string().min(1)).min(1),
+  experience_section: z.array(resumeExperienceEntrySchema).min(1),
+  education_section: z.array(resumeEducationEntrySchema),
+  certifications_section: z.array(z.string()),
+  keywords: z.array(z.string().min(1)).min(1),
+});
+
+export type ResumeExperienceEntry = z.infer<typeof resumeExperienceEntrySchema>;
+export type ResumeEducationEntry = z.infer<typeof resumeEducationEntrySchema>;
+export type GenerateResumeOutput = z.infer<typeof generateResumeSchema>;
+
+// ─── SCORE_RESUME (PR Prompt 7) ─────────────────────────────────────
+
+export const missingMetricSchema = z.object({
+  bullet_text: z.string().min(1),
+  role: z.string().min(1),
+  suggestion: z.string().min(1),
+});
+
+export const weakBulletSchema = z.object({
+  bullet_text: z.string().min(1),
+  role: z.string().min(1),
+  issue: z.string().min(1),
+  suggested_rewrite: z.string().min(1),
+});
+
+export const scoreResumeSchema = z.object({
+  ats_score: z.number().int().min(0).max(100),
+  ats_feedback: z.string().min(1),
+  clarity_score: z.number().int().min(0).max(100),
+  clarity_feedback: z.string().min(1),
+  specificity_score: z.number().int().min(0).max(100),
+  specificity_feedback: z.string().min(1),
+  missing_metrics: z.array(missingMetricSchema),
+  weak_bullets: z.array(weakBulletSchema),
+  general_suggestions: z.array(z.string().min(1)),
+});
+
+export type MissingMetric = z.infer<typeof missingMetricSchema>;
+export type WeakBullet = z.infer<typeof weakBulletSchema>;
+export type ScoreResumeOutput = z.infer<typeof scoreResumeSchema>;
