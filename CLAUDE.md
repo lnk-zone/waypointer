@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E7-02 (Job Matching and Scoring)
-Currently working: E7-03 (Recommended Jobs Feed and Job Detail Screen)
-Next up: E7-04
+Last completed: E7-03 (Recommended Jobs Feed and Job Detail Screen)
+Currently working: E7-04 (Application Kit Generation)
+Next up: E8-01
