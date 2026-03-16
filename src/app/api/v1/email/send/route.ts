@@ -64,7 +64,7 @@ function getBaseUrl(): string {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-  return "https://waypointer.com";
+  return "https://getwaypointer.com";
 }
 
 async function generateSeatToken(

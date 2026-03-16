@@ -39,7 +39,7 @@ export interface SendEmailResult {
 
 // ─── Sender ──────────────────────────────────────────────────────────
 
-const FROM_ADDRESS = "Waypointer <support@waypointer.com>";
+const FROM_ADDRESS = "Waypointer <support@getwaypointer.com>";
 
 export async function sendEmail(
   params: SendEmailParams

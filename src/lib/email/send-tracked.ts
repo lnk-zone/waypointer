@@ -38,7 +38,7 @@ function getBaseUrl(override?: string): string {
   if (override) return override;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
-  return "https://waypointer.com";
+  return "https://getwaypointer.com";
 }
 
 // ─── Main Function ────────────────────────────────────────────────────
