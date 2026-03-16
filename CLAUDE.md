@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E11-02 (Program Settings)
-Currently working: E11-03 (Employee Invitations)
-Next up: E11-04
+Last completed: E11-03 (Employee Invitations)
+Currently working: E11-04 (Employer Dashboard)
+Next up: E11-05
