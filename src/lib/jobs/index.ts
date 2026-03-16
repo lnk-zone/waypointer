@@ -19,3 +19,5 @@ export {
   markStaleListings,
   type IngestResult,
 } from "./ingest";
+
+export { matchJobsForEmployee, type MatchResult } from "./matching";

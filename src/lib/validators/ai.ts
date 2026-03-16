@@ -248,3 +248,27 @@ export const generateLinkedInSchema = z.object({
 });
 
 export type GenerateLinkedInOutput = z.infer<typeof generateLinkedInSchema>;
+
+// ─── SCORE_JOB_BATCH (PR Prompt 9) ──────────────────────────────────
+
+export const scoredJobSchema = z.object({
+  job_id: z.string().min(1),
+  fit: z.enum(["high_fit", "stretch", "low_fit"]),
+  match_explanation: z.string().min(1),
+  competition_level: z.enum(["low", "medium", "high"]),
+  recommended_action: z.enum([
+    "apply_now",
+    "reach_out_first",
+    "seek_referral",
+    "save_for_later",
+    "skip",
+  ]),
+  matching_path_id: z.string().nullable(),
+});
+
+export const scoreJobBatchSchema = z.object({
+  scored_jobs: z.array(scoredJobSchema).min(1),
+});
+
+export type ScoredJob = z.infer<typeof scoredJobSchema>;
+export type ScoreJobBatchOutput = z.infer<typeof scoreJobBatchSchema>;
