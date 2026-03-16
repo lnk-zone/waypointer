@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E12-01 (Email Templates and Sending)
-Currently working: E12-02 (Automated Email Triggers)
-Next up: E13-01
+Last completed: E12-02 (Automated Email Triggers)
+Currently working: E13-01
+Next up: E13-02
