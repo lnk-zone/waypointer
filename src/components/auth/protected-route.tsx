@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
+import { WaypointerLogo } from "@/components/brand/logo";
 
 type UserRole = "employee" | "employer_admin" | "new_user";
 
@@ -84,18 +85,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   if (isLoading || !authorized) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="mx-auto max-w-5xl space-y-6">
-          {/* Skeleton header */}
-          <div className="h-8 w-48 animate-shimmer rounded bg-gray-200" />
-          {/* Skeleton content blocks */}
-          <div className="space-y-4">
-            <div className="h-4 w-full animate-shimmer rounded bg-gray-200" />
-            <div className="h-4 w-3/4 animate-shimmer rounded bg-gray-200" />
-            <div className="h-4 w-1/2 animate-shimmer rounded bg-gray-200" />
-          </div>
-          {/* Skeleton card */}
-          <div className="h-40 w-full animate-shimmer rounded-lg bg-gray-200" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="animate-logo-pulse">
+          <WaypointerLogo size={48} variant="mark" />
         </div>
       </div>
     );

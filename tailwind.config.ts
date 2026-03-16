@@ -80,10 +80,15 @@ const config: Config = {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "logo-pulse": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.7", transform: "scale(0.96)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 150ms ease-out",
         shimmer: "shimmer 1.5s ease-in-out infinite",
+        "logo-pulse": "logo-pulse 2s ease-in-out infinite",
       },
     },
   },
