@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waypointer — Interactive Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ===== CSS RESET & BASE ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh}
+img{max-width:100%}
+button{cursor:pointer;font-family:inherit;border:none;background:none}
+input,select,textarea{font-family:inherit;font-size:inherit}
+
+/* ===== DESIGN TOKENS ===== */
+:root{
+  --blue:#2563EB;--blue-light:#DBEAFE;--blue-dark:#1D4ED8;
+  --bg:#FAFAFA;--surface:#FFFFFF;--border:#E5E7EB;--muted:#9CA3AF;
+  --text-primary:#111827;--text-secondary:#6B7280;
+  --success:#059669;--warning:#D97706;--danger:#DC2626;
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-full:9999px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05);--shadow-md:0 4px 6px rgba(0,0,0,.07);--shadow-lg:0 10px 15px rgba(0,0,0,.1);
+  --font-mono:'JetBrains Mono',monospace;
+  --sidebar-w:240px;
+}
+
+/* ===== TYPOGRAPHY ===== */
+.display{font-size:36px;line-height:44px;font-weight:600}
+.h1{font-size:24px;line-height:32px;font-weight:600}
+.h2{font-size:18px;line-height:28px;font-weight:600}
+.h3{font-size:16px;line-height:24px;font-weight:600}
+.body{font-size:15px;line-height:24px}
+.body-sm{font-size:13px;line-height:20px}
+.caption{font-size:12px;line-height:16px}
+.metric{font-family:var(--font-mono);font-size:32px;line-height:40px;font-weight:500}
+
+/* ===== LAYOUT ===== */
+.screen{display:none;min-height:100vh}
+.screen.active{display:flex}
+.screen-full{flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center}
+.app-layout{display:flex;width:100%;min-height:100vh}
+.sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);padding:24px 0;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.sidebar-logo{padding:0 20px 24px;font-size:18px;font-weight:700;color:var(--blue);display:flex;align-items:center;gap:8px}
+.sidebar-logo svg{width:24px;height:24px}
+.sidebar-nav{flex:1;display:flex;flex-direction:column;gap:2px;padding:0 8px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--text-secondary);font-size:14px;font-weight:500;transition:all .2s;text-decoration:none;border-left:2px solid transparent}
+.nav-item:hover{background:var(--bg);color:var(--text-primary)}
+.nav-item.active{background:var(--blue-light);color:var(--blue);border-left-color:var(--blue)}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.sidebar-footer{padding:16px 20px;border-top:1px solid var(--border);margin-top:auto}
+.sidebar-footer .body-sm{color:var(--text-secondary)}
+.main{margin-left:var(--sidebar-w);flex:1;padding:32px 40px;max-width:1200px}
+.main-wide{margin-left:var(--sidebar-w);flex:1;padding:32px 40px}
+
+/* ===== COMPONENTS ===== */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;transition:all .2s}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dark)}
+.btn-secondary{background:var(--surface);color:var(--blue);border:1px solid var(--border)}.btn-secondary:hover{background:var(--blue-light)}
+.btn-ghost{color:var(--text-secondary)}.btn-ghost:hover{color:var(--text-primary);background:var(--bg)}
+.btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:#B91C1C}
+.btn-lg{height:48px;padding:0 24px;font-size:16px}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.btn-full{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;box-shadow:var(--shadow-sm);transition:all .2s}
+.card-hover:hover{box-shadow:var(--shadow-md);border-color:var(--blue)}
+.card-selected{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light)}
+
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--radius-full);font-size:12px;font-weight:500}
+.badge-success{background:#D1FAE5;color:#065F46}
+.badge-warning{background:#FEF3C7;color:#92400E}
+.badge-danger{background:#FEE2E2;color:#991B1B}
+.badge-blue{background:var(--blue-light);color:var(--blue)}
+.badge-muted{background:#F3F4F6;color:var(--text-secondary)}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:var(--radius-full);font-size:12px;background:var(--blue-light);color:var(--blue)}
+.chip-remove{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px}.chip-remove:hover{background:rgba(37,99,235,.2)}
+
+.input{width:100%;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--surface);transition:border .2s;color:var(--text-primary)}
+.input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light)}
+.textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;resize:vertical;min-height:80px;background:var(--surface)}
+.textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light)}
+.select{width:100%;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--surface);color:var(--text-primary);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236B7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-group{margin-bottom:16px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.radio-group{display:flex;gap:12px;flex-wrap:wrap}
+.radio-option{display:flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;transition:all .2s}
+.radio-option:hover{border-color:var(--blue)}
+.radio-option.selected{border-color:var(--blue);background:var(--blue-light);color:var(--blue)}
+
+.progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .4s ease-out}
+
+.score-circle{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:24px;font-weight:500;border:3px solid}
+.score-high{border-color:var(--success);color:var(--success)}
+.score-mid{border-color:var(--warning);color:var(--warning)}
+.score-low{border-color:var(--danger);color:var(--danger)}
+
+.tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px}
+.tab{padding:12px 20px;font-size:14px;font-weight:500;color:var(--text-secondary);border-bottom:2px solid transparent;cursor:pointer;transition:all .2s}
+.tab:hover{color:var(--text-primary)}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);font-size:13px;z-index:9999;display:none;animation:slideIn .3s ease-out}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+.skeleton{background:linear-gradient(90deg,#E5E7EB 25%,#F3F4F6 50%,#E5E7EB 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius-sm)}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+.divider{height:1px;background:var(--border);margin:24px 0}
+.spacer-sm{height:8px}.spacer-md{height:16px}.spacer-lg{height:24px}.spacer-xl{height:40px}
+.text-muted{color:var(--text-secondary)}.text-blue{color:var(--blue)}.text-success{color:var(--success)}.text-warning{color:var(--warning)}.text-danger{color:var(--danger)}
+.flex{display:flex}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-between{justify-content:space-between}.gap-2{gap:8px}.gap-3{gap:12px}.gap-4{gap:16px}.gap-6{gap:24px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.w-full{width:100%}.mt-2{margin-top:8px}.mt-4{margin-top:16px}.mt-6{margin-top:24px}.mb-2{margin-bottom:8px}.mb-4{margin-bottom:16px}
+
+/* ===== EMPLOYER NAV COLOR ===== */
+.sidebar-employer{border-right-color:#7C3AED}
+.sidebar-employer .sidebar-logo{color:#7C3AED}
+.sidebar-employer .nav-item.active{background:#EDE9FE;color:#7C3AED;border-left-color:#7C3AED}
+
+/* ===== MODE SWITCHER ===== */
+.mode-switcher{position:fixed;top:12px;right:12px;z-index:9999;display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:4px;box-shadow:var(--shadow-md)}
+.mode-btn{padding:6px 14px;border-radius:var(--radius-full);font-size:12px;font-weight:500;color:var(--text-secondary);transition:all .2s}
+.mode-btn.active{background:var(--blue);color:#fff}
+.mode-btn.active-employer{background:#7C3AED;color:#fff}
+
+/* ===== UPLOAD ZONE ===== */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius-md);padding:40px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-zone:hover{border-color:var(--blue);background:var(--blue-light)}
+
+/* ===== TIMELINE ===== */
+.timeline{position:relative;padding-left:24px}
+.timeline::before{content:'';position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.timeline-item{position:relative;padding-bottom:20px}
+.timeline-dot{position:absolute;left:-20px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--blue);border:2px solid var(--surface)}
+.timeline-dot.done{background:var(--success)}
+.timeline-dot.pending{background:var(--border)}
+
+/* ===== INTERVIEW UI ===== */
+.voice-indicator{width:60px;height:60px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:.8}}
+
+/* ===== TWO-PANE LAYOUT ===== */
+.two-pane{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.two-pane-wide{display:grid;grid-template-columns:3fr 2fr;gap:24px}
+
+/* ===== HEATMAP ===== */
+.heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.heatmap-cell{aspect-ratio:1;border-radius:2px;background:var(--border)}
+.heatmap-cell.low{background:#DBEAFE}.heatmap-cell.med{background:#93C5FD}.heatmap-cell.high{background:var(--blue)}
+</style>
+</head>
+<body>
+
+<!-- MODE SWITCHER -->
+<div class="mode-switcher">
+  <button class="mode-btn active" onclick="switchMode('employee')">Employee</button>
+  <button class="mode-btn" onclick="switchMode('employer')">Employer</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 1: WELCOME -->
+<!-- ============================================================ -->
+<div id="screen-welcome" class="screen screen-full active" data-mode="employee">
+  <div style="max-width:560px">
+    <div style="margin-bottom:32px">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="#2563EB"/><path d="M16 24l6 6 10-12" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <p class="body-sm text-muted mb-2">Acme Corp has provided you with career transition support</p>
+    <h1 class="display" style="margin-bottom:16px">Let's get you moving again.</h1>
+    <p class="body text-muted" style="margin-bottom:12px;max-width:440px;margin-left:auto;margin-right:auto">
+      Waypointer helps you figure out your next move — with targeted role paths, tailored resumes, curated job matches, and interview practice. All personalized to your background.
+    </p>
+    <p class="body-sm text-muted" style="margin-bottom:32px">Your first session takes about 15–20 minutes.</p>
+    <div class="card" style="text-align:left;padding:20px;margin-bottom:24px;max-width:400px;margin-left:auto;margin-right:auto">
+      <p class="body-sm" style="font-style:italic;color:var(--text-secondary)">"We value everything you contributed to Acme. This platform is here to help you land your next role with confidence. — The Acme People Team"</p>
+    </div>
+    <button class="btn btn-primary btn-lg" onclick="navigate('screen-import')">Start your transition plan</button>
+    <p class="caption text-muted mt-4">90 days of full access included</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 2: IMPORT YOUR BACKGROUND -->
+<!-- ============================================================ -->
+<div id="screen-import" class="screen screen-full" data-mode="employee">
+  <div style="max-width:640px;width:100%;text-align:left">
+    <h1 class="h1 mb-4">Import your background</h1>
+    <p class="body text-muted mb-4">Upload your resume or import from LinkedIn so we can understand your experience. We'll also need a few details about what you're looking for.</p>
+
+    <div class="grid-2 mb-4">
+      <div class="upload-zone" onclick="simulateUpload(this)">
+        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" style="margin:0 auto 8px"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <p class="body-sm" style="font-weight:500">Upload Resume</p>
+        <p class="caption text-muted">PDF or DOCX, up to 10MB</p>
+      </div>
+      <div class="upload-zone" style="opacity:.6">
+        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" style="margin:0 auto 8px"><rect x="2" y="2" width="20" height="20" rx="4" stroke="#0A66C2" stroke-width="2"/><path d="M8 11v5M8 8v.01M12 16v-4a2 2 0 014 0v4" stroke="#0A66C2" stroke-width="2" stroke-linecap="round"/></svg>
+        <p class="body-sm" style="font-weight:500">Import from LinkedIn</p>
+        <p class="caption text-muted">Connect your profile</p>
+      </div>
+    </div>
+
+    <div id="upload-success" style="display:none" class="card mb-4" style="border-color:var(--success)">
+      <div class="flex items-center gap-2">
+        <span style="color:var(--success)">&#10003;</span>
+        <span class="body-sm"><strong>Maya_Chen_Resume.pdf</strong> uploaded successfully</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <h2 class="h2 mb-4">Tell us about yourself</h2>
+
+    <div class="form-row mb-4">
+      <div class="form-group"><label class="label">Location</label><select class="select"><option>San Francisco, CA</option></select></div>
+      <div class="form-group"><label class="label">Work Preference</label>
+        <div class="radio-group"><span class="radio-option selected">Remote</span><span class="radio-option" onclick="this.parentNode.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));this.classList.add('selected')">Hybrid</span><span class="radio-option" onclick="this.parentNode.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));this.classList.add('selected')">On-site</span></div>
+      </div>
+    </div>
+    <div class="form-row mb-4">
+      <div class="form-group"><label class="label">Compensation Target</label><input class="input" type="text" value="$120,000 – $160,000"></div>
+      <div class="form-group"><label class="label">Work Authorization</label><select class="select"><option>US Citizen</option><option>Green Card</option><option>H-1B</option><option>OPT</option></select></div>
+    </div>
+    <div class="form-row mb-4">
+      <div class="form-group"><label class="label">Seniority Level</label><select class="select"><option>Senior</option><option>Entry-Level</option><option>Mid-Level</option><option>Staff/Principal</option><option>Manager</option><option>Director</option></select></div>
+      <div class="form-group"><label class="label">Management Experience</label><select class="select"><option>4–10 direct reports</option><option>No direct reports</option><option>1–3 direct reports</option><option>10+ direct reports</option></select></div>
+    </div>
+    <div class="form-group mb-4"><label class="label">Level Direction</label>
+      <div class="radio-group"><span class="radio-option selected">Stay at my current level</span><span class="radio-option" onclick="this.parentNode.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));this.classList.add('selected')">Open to a step up</span><span class="radio-option" onclick="this.parentNode.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));this.classList.add('selected')">Open to a step down</span></div>
+    </div>
+    <button class="btn btn-primary btn-lg btn-full" onclick="navigate('screen-snapshot')">Analyze my background</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 3: CAREER SNAPSHOT REVIEW -->
+<!-- ============================================================ -->
+<div id="screen-snapshot" class="screen screen-full" data-mode="employee">
+  <div style="max-width:800px;width:100%;text-align:left">
+    <h1 class="h1 mb-2">Your Career Snapshot</h1>
+    <p class="body text-muted mb-4">We've analyzed your resume. Review the details below and make any corrections before continuing.</p>
+
+    <div class="card mb-4">
+      <h3 class="h3 mb-2">Career Narrative</h3>
+      <p class="body">Experienced Customer Success Manager with 8 years in B2B SaaS, specializing in mid-market account management, retention strategy, and cross-functional onboarding. Track record of portfolio growth and measurable client outcomes.</p>
+    </div>
+
+    <div class="card mb-4">
+      <h3 class="h3 mb-2">Work History</h3>
+      <div class="timeline">
+        <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm" style="font-weight:500">Customer Success Manager — Acme SaaS</p><p class="caption text-muted">Mar 2021 – Jan 2025 (3 yrs 10 mo)</p></div>
+        <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm" style="font-weight:500">Associate CSM — CloudStack Inc</p><p class="caption text-muted">Jun 2018 – Feb 2021 (2 yrs 8 mo)</p></div>
+        <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm" style="font-weight:500">Client Coordinator — BrightEdge Solutions</p><p class="caption text-muted">Aug 2016 – May 2018 (1 yr 9 mo)</p></div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <h3 class="h3 mb-2">Key Skills</h3>
+      <div class="flex gap-2" style="flex-wrap:wrap">
+        <span class="chip">Salesforce <span class="chip-remove">&times;</span></span>
+        <span class="chip">Account Management <span class="chip-remove">&times;</span></span>
+        <span class="chip">Retention Strategy <span class="chip-remove">&times;</span></span>
+        <span class="chip">Customer Onboarding <span class="chip-remove">&times;</span></span>
+        <span class="chip">QBR Facilitation <span class="chip-remove">&times;</span></span>
+        <span class="chip">Cross-functional Leadership <span class="chip-remove">&times;</span></span>
+        <span class="chip">Gainsight <span class="chip-remove">&times;</span></span>
+        <span class="chip">Data Analysis <span class="chip-remove">&times;</span></span>
+        <span class="chip">Stakeholder Enablement <span class="chip-remove">&times;</span></span>
+        <span class="chip">Churn Reduction <span class="chip-remove">&times;</span></span>
+      </div>
+      <button class="btn btn-ghost btn-sm mt-2">+ Add skill</button>
+    </div>
+
+    <div class="card mb-4">
+      <h3 class="h3 mb-2">Top Achievements</h3>
+      <div class="flex-col gap-3">
+        <div class="flex items-center gap-2"><span class="badge badge-success">Revenue</span><span class="body-sm">Grew portfolio retention from 82% to 94% over 18 months, adding $1.2M in renewal revenue</span></div>
+        <div class="flex items-center gap-2"><span class="badge badge-blue">Scale</span><span class="body-sm">Led onboarding redesign that cut time-to-value from 45 to 22 days across 120+ accounts</span></div>
+        <div class="flex items-center gap-2"><span class="badge badge-warning">Efficiency</span><span class="body-sm">Built automated health-score dashboard in Gainsight, reducing manual reporting by 6 hrs/week</span></div>
+        <div class="flex items-center gap-2"><span class="badge badge-success">Revenue</span><span class="body-sm">Drove $800K in expansion revenue through strategic upsell motions in Year 2</span></div>
+        <div class="flex items-center gap-2"><span class="badge-muted badge">Leadership</span><span class="body-sm">Mentored 3 junior CSMs who were promoted within 18 months</span></div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-4">
+      <div class="card"><h3 class="h3 mb-2">Industries</h3><div class="flex gap-2" style="flex-wrap:wrap"><span class="chip">B2B SaaS</span><span class="chip">FinTech</span><span class="chip">MarTech</span></div></div>
+      <div class="card"><h3 class="h3 mb-2">Tools & Tech</h3><div class="flex gap-2" style="flex-wrap:wrap"><span class="chip">Salesforce</span><span class="chip">Gainsight</span><span class="chip">Looker</span><span class="chip">Zendesk</span><span class="chip">Slack</span></div></div>
+    </div>
+
+    <div class="flex gap-3">
+      <button class="btn btn-secondary" onclick="navigate('screen-import')">Back</button>
+      <button class="btn btn-primary btn-lg" style="flex:1" onclick="navigate('screen-paths')">Looks right — continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 4: TARGET ROLE PATHS -->
+<!-- ============================================================ -->
+<div id="screen-paths" class="screen screen-full" data-mode="employee">
+  <div style="max-width:900px;width:100%;text-align:left">
+    <h1 class="h1 mb-2">Your Target Role Paths</h1>
+    <p class="body text-muted mb-4">Based on your background, we recommend these three directions. Select at least one to build your search plan around.</p>
+
+    <div class="grid-3 mb-4" id="path-cards">
+      <div class="card card-hover card-selected" onclick="togglePath(this)" data-selected="true">
+        <div class="flex justify-between items-center mb-2"><span class="badge badge-success">High Demand</span><span class="badge badge-blue">Primary</span></div>
+        <h3 class="h3 mb-2">Customer Success Manager at B2B SaaS</h3>
+        <p class="body-sm text-muted mb-4">Direct continuation of your 4-year CSM career. Strong demand in mid-market SaaS, and your retention metrics make you highly competitive.</p>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Salary band</span><span>$120K – $155K</span></div>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Skills overlap</span><span style="color:var(--success)">85%</span></div>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Confidence</span><span class="metric" style="font-size:16px">88%</span></div>
+        <div class="progress-bar mt-2"><div class="progress-bar-fill" style="width:85%"></div></div>
+        <p class="caption text-muted mt-2">Gap: Consider Gainsight certification for enterprise roles</p>
+      </div>
+
+      <div class="card card-hover" onclick="togglePath(this)" data-selected="false">
+        <div class="flex justify-between items-center mb-2"><span class="badge badge-warning">Medium Demand</span></div>
+        <h3 class="h3 mb-2">Implementation Consultant</h3>
+        <p class="body-sm text-muted mb-4">Leverages your technical onboarding expertise. Higher compensation ceiling and growing demand as SaaS companies invest in customer time-to-value.</p>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Salary band</span><span>$130K – $170K</span></div>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Skills overlap</span><span style="color:var(--warning)">68%</span></div>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Confidence</span><span class="metric" style="font-size:16px">74%</span></div>
+        <div class="progress-bar mt-2"><div class="progress-bar-fill" style="width:68%"></div></div>
+        <p class="caption text-muted mt-2">Gap: Strengthen project management and technical integration skills</p>
+      </div>
+
+      <div class="card card-hover" onclick="togglePath(this)" data-selected="false">
+        <div class="flex justify-between items-center mb-2"><span class="badge badge-success">High Demand</span></div>
+        <h3 class="h3 mb-2">Revenue Operations Analyst</h3>
+        <p class="body-sm text-muted mb-4">Pivot into a growing function. Your Salesforce admin skills and data-driven approach transfer well. RevOps is one of the fastest-growing functions in SaaS.</p>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Salary band</span><span>$115K – $145K</span></div>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Skills overlap</span><span style="color:var(--warning)">58%</span></div>
+        <div class="flex justify-between body-sm mb-2"><span class="text-muted">Confidence</span><span class="metric" style="font-size:16px">62%</span></div>
+        <div class="progress-bar mt-2"><div class="progress-bar-fill" style="width:58%"></div></div>
+        <p class="caption text-muted mt-2">Gap: SQL proficiency and RevOps tooling (Clari, LeanData)</p>
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center">
+      <button class="btn btn-ghost">+ Add custom path</button>
+      <button class="btn btn-primary btn-lg" onclick="navigate('screen-dashboard')">Build my search plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 5: TRANSITION PLAN DASHBOARD -->
+<!-- ============================================================ -->
+<div id="screen-dashboard" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar">
+    <div class="sidebar-logo"><svg width="24" height="24" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="#2563EB"/><path d="M16 24l6 6 10-12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Waypointer</div>
+    <div class="sidebar-nav">
+      <a class="nav-item active" onclick="navigateWithNav(this,'screen-dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4h4v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg> Home</a>
+      <a class="nav-item" onclick="navigateWithNav(this,'screen-resume')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8m8 4H8m2-8H8"/></svg> Resumes</a>
+      <a class="nav-item" onclick="navigateWithNav(this,'screen-linkedin')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="4"/><path d="M8 11v5M8 8v.01M12 16v-4a2 2 0 014 0v4"/></svg> LinkedIn</a>
+      <a class="nav-item" onclick="navigateWithNav(this,'screen-jobs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg> Jobs</a>
+      <a class="nav-item" onclick="navigateWithNav(this,'screen-outreach')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg> Outreach</a>
+      <a class="nav-item" onclick="navigateWithNav(this,'screen-interview-prep')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8"/></svg> Interviews</a>
+      <a class="nav-item" onclick="navigateWithNav(this,'screen-progress')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Progress</a>
+    </div>
+    <div class="sidebar-footer"><p class="body-sm text-muted">Maya Chen</p><p class="caption text-muted">78 days remaining</p></div>
+  </nav>
+  <div class="main">
+    <h1 class="h1 mb-2">Your Transition Plan</h1>
+    <div class="flex gap-2 mb-4"><span class="chip">CSM at B2B SaaS</span><span class="chip">Implementation Consultant</span></div>
+
+    <div class="card mb-4" style="background:linear-gradient(135deg,#EFF6FF,#DBEAFE);border-color:var(--blue)">
+      <div class="flex justify-between items-center">
+        <div>
+          <p class="body-sm text-muted">Search Strategy</p>
+          <p class="body" style="font-weight:500">Focus 70% on CSM roles, 30% on Implementation Consultant. Your retention metrics make you strongest in CSM.</p>
+        </div>
+        <div class="score-circle score-mid" style="flex-shrink:0">42%</div>
+      </div>
+      <p class="caption text-muted mt-2">Readiness Score — Complete resumes and LinkedIn to improve</p>
+    </div>
+
+    <h2 class="h2 mb-4">First 7-Day Plan</h2>
+    <div class="flex-col gap-3 mb-4">
+      <div class="card flex items-center gap-3"><span style="color:var(--success);font-size:18px">&#10003;</span><div><p class="body-sm" style="font-weight:500">Day 1–2: Build tailored resumes for both paths</p><p class="caption text-muted">Generate role-specific resumes with ATS-optimized keywords</p></div></div>
+      <div class="card flex items-center gap-3"><span style="color:var(--border);font-size:18px">&#9675;</span><div><p class="body-sm" style="font-weight:500">Day 2–3: Update LinkedIn profile</p><p class="caption text-muted">Rewrite headline, About, and experience bullets</p></div></div>
+      <div class="card flex items-center gap-3"><span style="color:var(--border);font-size:18px">&#9675;</span><div><p class="body-sm" style="font-weight:500">Day 3–5: Review first batch of matched jobs</p><p class="caption text-muted">Browse 15+ curated matches for your target paths</p></div></div>
+      <div class="card flex items-center gap-3"><span style="color:var(--border);font-size:18px">&#9675;</span><div><p class="body-sm" style="font-weight:500">Day 5–7: Send 3 outreach messages + 1 mock interview</p><p class="caption text-muted">Start building momentum with real contacts</p></div></div>
+    </div>
+
+    <h2 class="h2 mb-4">Quick Actions</h2>
+    <div class="grid-2">
+      <button class="card card-hover flex items-center gap-3" onclick="navigate('screen-resume')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg><span class="body-sm" style="font-weight:500">Build my resumes</span></button>
+      <button class="card card-hover flex items-center gap-3" onclick="navigate('screen-linkedin')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="4"/><path d="M8 11v5M8 8v.01M12 16v-4a2 2 0 014 0v4"/></svg><span class="body-sm" style="font-weight:500">Update my LinkedIn</span></button>
+      <button class="card card-hover flex items-center gap-3" onclick="navigate('screen-jobs')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg><span class="body-sm" style="font-weight:500">See recommended jobs</span></button>
+      <button class="card card-hover flex items-center gap-3" onclick="navigate('screen-interview-prep')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg><span class="body-sm" style="font-weight:500">Practice interviews</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 6: RESUME WORKSPACE -->
+<!-- ============================================================ -->
+<div id="screen-resume" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-resume"></nav>
+  <div class="main-wide">
+    <h1 class="h1 mb-4">Resume Workspace</h1>
+    <div class="tab-bar">
+      <div class="tab active">CSM at B2B SaaS</div>
+      <div class="tab" onclick="this.parentNode.querySelector('.active').classList.remove('active');this.classList.add('active')">Implementation Consultant</div>
+    </div>
+    <div class="two-pane-wide">
+      <div class="card" style="padding:24px">
+        <h3 class="h3 mb-2">Maya Chen</h3>
+        <p class="caption text-muted mb-4">San Francisco, CA | maya.chen@email.com | (415) 555-0142</p>
+        <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">Summary</h4>
+        <p class="body-sm mb-4">Results-driven Customer Success Manager with 8 years of B2B SaaS experience. Proven track record of growing portfolio retention, driving expansion revenue, and building scalable onboarding processes. Adept at translating complex customer needs into measurable outcomes.</p>
+        <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">Key Skills</h4>
+        <p class="body-sm mb-4">Customer Retention, Account Management, Salesforce, Gainsight, QBR Facilitation, Onboarding Design, Revenue Expansion, Data Analysis, Cross-functional Leadership</p>
+        <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">Experience</h4>
+        <p class="body-sm" style="font-weight:600">Customer Success Manager — Acme SaaS <span style="font-weight:400;color:var(--text-secondary)">| 2021 – 2025</span></p>
+        <ul style="margin:8px 0 16px 20px;font-size:13px;line-height:20px;color:var(--text-primary)">
+          <li style="margin-bottom:4px">Grew portfolio retention from 82% to 94% over 18 months, contributing $1.2M in renewal revenue</li>
+          <li style="margin-bottom:4px">Led onboarding redesign that reduced time-to-value from 45 to 22 days across 120+ accounts</li>
+          <li style="margin-bottom:4px">Drove $800K in expansion revenue through strategic upsell identification and execution</li>
+          <li>Built automated health-score dashboard in Gainsight, saving 6 hours/week in manual reporting</li>
+        </ul>
+        <p class="body-sm" style="font-weight:600">Associate CSM — CloudStack Inc <span style="font-weight:400;color:var(--text-secondary)">| 2018 – 2021</span></p>
+        <ul style="margin:8px 0 0 20px;font-size:13px;line-height:20px;color:var(--text-primary)">
+          <li style="margin-bottom:4px">Managed 45-account portfolio with 90%+ retention rate</li>
+          <li style="margin-bottom:4px">Created QBR template adopted by entire CS team of 12</li>
+          <li>Identified and escalated 3 at-risk enterprise accounts, retaining $2.1M in ARR</li>
+        </ul>
+      </div>
+      <div class="flex-col gap-4">
+        <div class="card">
+          <h3 class="h3 mb-2">Resume Scores</h3>
+          <div class="flex-col gap-3">
+            <div><div class="flex justify-between body-sm mb-1"><span>ATS Strength</span><span class="metric" style="font-size:16px;color:var(--success)">82</span></div><div class="progress-bar"><div class="progress-bar-fill" style="width:82%;background:var(--success)"></div></div></div>
+            <div><div class="flex justify-between body-sm mb-1"><span>Clarity</span><span class="metric" style="font-size:16px;color:var(--success)">88</span></div><div class="progress-bar"><div class="progress-bar-fill" style="width:88%;background:var(--success)"></div></div></div>
+            <div><div class="flex justify-between body-sm mb-1"><span>Specificity</span><span class="metric" style="font-size:16px;color:var(--warning)">72</span></div><div class="progress-bar"><div class="progress-bar-fill" style="width:72%;background:var(--warning)"></div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="h3 mb-2">Suggestions</h3>
+          <div class="flex-col gap-3">
+            <div class="body-sm" style="padding:8px;background:#FEF3C7;border-radius:var(--radius-sm)">Your second bullet in Acme doesn't include a specific number. Add a metric for stronger impact.</div>
+            <div class="body-sm" style="padding:8px;background:var(--blue-light);border-radius:var(--radius-sm)">Consider adding "Gainsight" to your skills section — it appears in 73% of CSM job descriptions.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="h3 mb-2">Tone</h3>
+          <div class="radio-group"><span class="radio-option selected">Professional</span><span class="radio-option" onclick="this.parentNode.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));this.classList.add('selected')">Confident</span><span class="radio-option" onclick="this.parentNode.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));this.classList.add('selected')">Conversational</span></div>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-primary" style="flex:1">Download PDF</button>
+          <button class="btn btn-secondary" style="flex:1">Download DOCX</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 7: LINKEDIN OPTIMIZER -->
+<!-- ============================================================ -->
+<div id="screen-linkedin" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-li"></nav>
+  <div class="main">
+    <h1 class="h1 mb-4">LinkedIn Optimizer</h1>
+    <p class="body text-muted mb-4">Copy each section below and update your LinkedIn profile. Mark as updated when done.</p>
+    <div class="flex-col gap-4">
+      <div class="card"><div class="flex justify-between items-center mb-2"><h3 class="h3">Headline</h3><button class="btn btn-sm btn-secondary">Copy</button></div><p class="body-sm">Customer Success Manager | B2B SaaS | Retention & Expansion Strategist | Driving Measurable Client Outcomes</p></div>
+      <div class="card"><div class="flex justify-between items-center mb-2"><h3 class="h3">About Section</h3><button class="btn btn-sm btn-secondary">Copy</button></div><p class="body-sm">I help B2B SaaS companies retain and grow their customer base. Over the past 8 years, I've managed portfolios totaling $12M+ in ARR, consistently achieving 90%+ retention rates. My approach combines data-driven health scoring with genuine relationship building — because the best retention strategy is making sure your customers actually succeed.<br><br>Most recently at Acme SaaS, I led a portfolio of 85 mid-market accounts, grew retention from 82% to 94%, and drove $800K in expansion revenue. I also redesigned the onboarding program, cutting time-to-value in half.<br><br>I'm currently exploring my next opportunity in Customer Success or Implementation Consulting. Open to remote roles at growth-stage B2B companies.</p></div>
+      <div class="card"><div class="flex justify-between items-center mb-2"><h3 class="h3">Featured Section Suggestions</h3><button class="btn btn-sm btn-secondary">Copy</button></div><ul style="font-size:13px;margin-left:20px;line-height:22px"><li>Pin your case study about the onboarding redesign at Acme</li><li>Add your QBR template as a document</li><li>Feature any recommendations from enterprise clients</li></ul></div>
+      <div class="card"><div class="flex justify-between items-center mb-2"><h3 class="h3">Open to Work Guidance</h3></div><p class="body-sm">Enable "Open to Work" with visibility set to <strong>Recruiters only</strong>. Select titles: Customer Success Manager, Senior CSM, Implementation Consultant, Client Success Manager. Locations: San Francisco Bay Area + Remote (United States).</p></div>
+      <div class="card"><div class="flex justify-between items-center mb-2"><h3 class="h3">Recruiter Tips</h3></div><p class="body-sm">Recruiters searching for CSM roles prioritize: Salesforce, retention metrics, and portfolio size. Make sure these appear in your headline or first 2 lines of your About section — recruiters preview these in search results.</p></div>
+    </div>
+    <div class="spacer-lg"></div>
+    <button class="btn btn-primary btn-lg btn-full" onclick="showToast('LinkedIn marked as updated! Readiness score improved.')">Mark profile updated</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 8: RECOMMENDED JOBS FEED -->
+<!-- ============================================================ -->
+<div id="screen-jobs" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-jobs"></nav>
+  <div class="main">
+    <h1 class="h1 mb-2">Recommended Jobs</h1>
+    <p class="body text-muted mb-4">Curated matches based on your target paths, location, and preferences.</p>
+    <div class="flex gap-2 mb-4">
+      <select class="select" style="width:auto;min-width:160px"><option>All Paths</option><option>CSM at B2B SaaS</option><option>Implementation Consultant</option></select>
+      <select class="select" style="width:auto;min-width:120px"><option>All Fit Scores</option><option>High Fit</option><option>Stretch</option></select>
+      <select class="select" style="width:auto;min-width:120px"><option>Sort: Fit Score</option><option>Date Posted</option><option>Company</option></select>
+    </div>
+    <div class="flex-col gap-3">
+      <div class="card card-hover" onclick="navigate('screen-job-detail')" style="cursor:pointer">
+        <div class="flex justify-between items-center mb-2"><h3 class="h3">Senior Customer Success Manager</h3><span class="badge badge-success">High Fit</span></div>
+        <p class="body-sm text-muted mb-2">Lattice — San Francisco, CA (Hybrid) — Posted 2 days ago</p>
+        <p class="body-sm mb-2">Strong match on Salesforce admin + stakeholder enablement. Portfolio size aligns with your experience. Compensation in range.</p>
+        <div class="flex gap-2 items-center"><span class="badge badge-muted">Low Competition</span><span class="badge badge-blue">Apply Now</span></div>
+      </div>
+      <div class="card card-hover" onclick="navigate('screen-job-detail')" style="cursor:pointer">
+        <div class="flex justify-between items-center mb-2"><h3 class="h3">Customer Success Manager, Mid-Market</h3><span class="badge badge-success">High Fit</span></div>
+        <p class="body-sm text-muted mb-2">Notion — Remote — Posted 3 days ago</p>
+        <p class="body-sm mb-2">Excellent industry fit. Your onboarding redesign experience maps directly to their current initiative. Strong culture match.</p>
+        <div class="flex gap-2 items-center"><span class="badge badge-warning">Medium Competition</span><span class="badge badge-blue">Apply Now</span></div>
+      </div>
+      <div class="card card-hover" onclick="navigate('screen-job-detail')" style="cursor:pointer">
+        <div class="flex justify-between items-center mb-2"><h3 class="h3">Implementation Consultant</h3><span class="badge badge-warning">Stretch</span></div>
+        <p class="body-sm text-muted mb-2">Gainsight — Remote — Posted 1 day ago</p>
+        <p class="body-sm mb-2">Stretch role but exceptional Gainsight expertise. Your platform knowledge gives you an edge over non-CS candidates.</p>
+        <div class="flex gap-2 items-center"><span class="badge badge-muted">Low Competition</span><span class="badge badge-blue">Reach Out First</span></div>
+      </div>
+      <div class="card card-hover" onclick="navigate('screen-job-detail')" style="cursor:pointer">
+        <div class="flex justify-between items-center mb-2"><h3 class="h3">Client Success Lead</h3><span class="badge badge-success">High Fit</span></div>
+        <p class="body-sm text-muted mb-2">Figma — San Francisco, CA (Hybrid) — Posted 5 days ago</p>
+        <p class="body-sm mb-2">Leadership component aligns with your mentoring experience. Design-tool company but B2B motion is familiar.</p>
+        <div class="flex gap-2 items-center"><span class="badge badge-danger">High Competition</span><span class="badge badge-blue">Seek Referral</span></div>
+      </div>
+      <div class="card card-hover" onclick="navigate('screen-job-detail')" style="cursor:pointer">
+        <div class="flex justify-between items-center mb-2"><h3 class="h3">Senior CSM, Enterprise</h3><span class="badge badge-warning">Stretch</span></div>
+        <p class="body-sm text-muted mb-2">Salesforce — San Francisco, CA — Posted 4 days ago</p>
+        <p class="body-sm mb-2">Compensation likely above target. Enterprise segment is a stretch from your mid-market focus, but brand recognition value is high.</p>
+        <div class="flex gap-2 items-center"><span class="badge badge-danger">High Competition</span><span class="badge badge-blue">Save for Later</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 9: JOB DETAIL + APPLICATION KIT -->
+<!-- ============================================================ -->
+<div id="screen-job-detail" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-jd"></nav>
+  <div class="main-wide">
+    <button class="btn btn-ghost mb-4" onclick="navigate('screen-jobs')">&larr; Back to Jobs</button>
+    <div class="two-pane">
+      <div>
+        <div class="flex justify-between items-center mb-2"><h1 class="h1">Senior Customer Success Manager</h1><span class="badge badge-success">High Fit</span></div>
+        <p class="body text-muted mb-4">Lattice — San Francisco, CA (Hybrid)</p>
+        <div class="card mb-4">
+          <h3 class="h3 mb-2">Match Analysis</h3>
+          <div class="grid-2 gap-3">
+            <div><p class="caption text-muted">Skills Matched</p><p class="body-sm">Salesforce, Account Management, QBR Facilitation, Retention, Onboarding</p></div>
+            <div><p class="caption text-muted">Skills Missing</p><p class="body-sm">Lattice platform experience (learnable)</p></div>
+            <div><p class="caption text-muted">Experience Alignment</p><p class="body-sm" style="color:var(--success)">Strong — mid-market B2B SaaS, similar portfolio size</p></div>
+            <div><p class="caption text-muted">Compensation</p><p class="body-sm" style="color:var(--success)">$130K–$155K — within your range</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="h3 mb-2">Likely Interview Themes</h3>
+          <ul style="font-size:13px;margin-left:20px;line-height:24px">
+            <li>Retention strategy at scale — how you moved from 82% to 94%</li>
+            <li>Cross-functional collaboration with Product and Engineering</li>
+            <li>Handling escalated accounts and executive stakeholder management</li>
+            <li>Onboarding process design and optimization</li>
+            <li>Data-driven decision making with health scores and dashboards</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h2 class="h2 mb-4">Application Kit</h2>
+        <div class="flex-col gap-3">
+          <div class="card"><p class="caption text-muted mb-1">Resume Recommendation</p><p class="body-sm">Use your <strong>CSM resume (Resume A)</strong>. <a style="color:var(--blue);cursor:pointer" onclick="navigate('screen-resume')">View resume</a></p></div>
+          <div class="card"><p class="caption text-muted mb-1">Tailored Intro Paragraph</p><p class="body-sm">I'm a Customer Success Manager with 8 years in B2B SaaS, most recently at Acme where I grew portfolio retention from 82% to 94% and drove $800K in expansion revenue. I'm drawn to Lattice because of your focus on people management — I've seen firsthand how the right tools transform manager-report relationships, and I'd love to bring my retention and onboarding expertise to your mid-market customer base.</p><button class="btn btn-sm btn-secondary mt-2">Copy</button></div>
+          <div class="card"><p class="caption text-muted mb-1">Recruiter Message</p><p class="body-sm">Hi [Name], I noticed the Senior CSM role at Lattice and it aligns closely with my background — 8 years in B2B SaaS CS, most recently managing 85 mid-market accounts at Acme with 94% retention. I'd love to learn more about the team. Would you be open to a brief chat?</p><button class="btn btn-sm btn-secondary mt-2">Copy</button></div>
+          <div class="card"><p class="caption text-muted mb-1">Hiring Manager Message</p><p class="body-sm">Hi [Name], I applied to the Senior CSM role and wanted to reach out directly. At Acme, I led a portfolio redesign that cut time-to-value in half — the kind of impact I'd love to bring to Lattice's mid-market customers. Happy to share more context if helpful.</p><button class="btn btn-sm btn-secondary mt-2">Copy</button></div>
+          <div class="flex gap-2 mt-2">
+            <button class="btn btn-primary" style="flex:1">Use this kit</button>
+            <button class="btn btn-secondary">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 10: OUTREACH BUILDER -->
+<!-- ============================================================ -->
+<div id="screen-outreach" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-out"></nav>
+  <div class="main">
+    <h1 class="h1 mb-4">Outreach Builder</h1>
+    <div class="two-pane">
+      <div>
+        <div class="card">
+          <h3 class="h3 mb-4">Build your message</h3>
+          <div class="form-group"><label class="label">Recipient Type</label>
+            <div class="radio-group"><span class="radio-option">Recruiter</span><span class="radio-option selected">Hiring Manager</span><span class="radio-option">Former Colleague</span><span class="radio-option">Alumni</span></div>
+          </div>
+          <div class="form-group"><label class="label">Role Pursuing</label><select class="select"><option>CSM at B2B SaaS</option><option>Implementation Consultant</option></select></div>
+          <div class="form-group"><label class="label">Company / Job</label><input class="input" value="Lattice — Senior CSM"></div>
+          <div class="form-group"><label class="label">Relationship</label>
+            <div class="radio-group"><span class="radio-option selected">Cold</span><span class="radio-option">Warm</span><span class="radio-option">Close</span></div>
+          </div>
+          <div class="form-group"><label class="label">Personal Context (optional)</label><input class="input" placeholder="e.g., We met at SaaStr 2024"></div>
+          <button class="btn btn-primary btn-full" onclick="document.getElementById('outreach-results').style.display='block'">Generate Messages</button>
+        </div>
+      </div>
+      <div id="outreach-results" style="display:none">
+        <div class="flex-col gap-3">
+          <div class="card"><div class="flex justify-between items-center mb-2"><p class="caption text-muted">LinkedIn Message (280 chars)</p><button class="btn btn-sm btn-secondary">Copy</button></div><p class="body-sm">Hi [Name], I applied to the Senior CSM role and wanted to connect. I managed 85 B2B SaaS accounts at Acme with 94% retention — I'd love to discuss how that maps to Lattice's customer base. Open to a quick chat?</p></div>
+          <div class="card"><div class="flex justify-between items-center mb-2"><p class="caption text-muted">Email Version</p><button class="btn btn-sm btn-secondary">Copy</button></div><p class="body-sm">Subject: Senior CSM Role — Quick Question<br><br>Hi [Name],<br><br>I recently applied to the Senior CSM position at Lattice and wanted to reach out directly. Over the past 4 years at Acme SaaS, I managed an 85-account mid-market portfolio, growing retention from 82% to 94% and driving $800K in expansion revenue. I also redesigned our onboarding process, cutting time-to-value in half.<br><br>I'm particularly drawn to Lattice's mission around people management, and I'd love to learn more about how the CS team supports product adoption. Would you be open to a brief conversation?<br><br>Best,<br>Maya</p></div>
+          <div class="card"><div class="flex justify-between items-center mb-2"><p class="caption text-muted">Follow-up (5–7 days later)</p><button class="btn btn-sm btn-secondary">Copy</button></div><p class="body-sm">Hi [Name], just following up on my note last week about the Senior CSM role. I know hiring timelines can shift — happy to connect whenever works. No rush at all.</p></div>
+          <div class="card" style="background:#FFFBEB">
+            <h3 class="h3 mb-2" style="font-size:13px">Guidance</h3>
+            <div class="body-sm"><strong>When to send:</strong> Within 24 hours of applying<br><strong>Follow up:</strong> If no response after 5–7 business days<br><strong>Tip:</strong> Don't mention being laid off in the first message. Lead with value and specific metrics.</div>
+          </div>
+          <div class="flex gap-2"><span class="radio-option selected" style="font-size:12px">Warmer</span><span class="radio-option" style="font-size:12px">More Formal</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 11: INTERVIEW PREP HUB -->
+<!-- ============================================================ -->
+<div id="screen-interview-prep" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-int"></nav>
+  <div class="main">
+    <h1 class="h1 mb-4">Interview Prep Hub</h1>
+    <div class="tab-bar"><div class="tab active">CSM at B2B SaaS</div><div class="tab" onclick="this.parentNode.querySelector('.active').classList.remove('active');this.classList.add('active')">Implementation Consultant</div></div>
+    <div class="grid-2 gap-4">
+      <div class="card"><h3 class="h3 mb-2">Common Questions</h3><ol style="font-size:13px;margin-left:20px;line-height:24px"><li>How do you build relationships with new accounts during onboarding?</li><li>Describe your approach to quarterly business reviews.</li><li>How do you identify and mitigate churn risk?</li><li>Walk me through a time you turned around a dissatisfied customer.</li><li>How do you prioritize when managing 50+ accounts?</li></ol></div>
+      <div class="card"><h3 class="h3 mb-2">Behavioral Questions</h3><ol style="font-size:13px;margin-left:20px;line-height:24px"><li>Tell me about a time you exceeded a retention target.</li><li>Describe a situation where you had to push back on a customer request.</li><li>How did you handle competing priorities from multiple stakeholders?</li><li>Give an example of cross-functional collaboration that drove results.</li></ol></div>
+      <div class="card"><h3 class="h3 mb-2">Your Strengths</h3><div class="flex-col gap-2"><div class="flex items-center gap-2"><span style="color:var(--success)">&#10003;</span><span class="body-sm">Retention metrics (82% → 94%) — concrete and impressive</span></div><div class="flex items-center gap-2"><span style="color:var(--success)">&#10003;</span><span class="body-sm">Onboarding redesign story — shows process thinking</span></div><div class="flex items-center gap-2"><span style="color:var(--success)">&#10003;</span><span class="body-sm">Revenue expansion track record — demonstrates business acumen</span></div></div></div>
+      <div class="card"><h3 class="h3 mb-2">Weak Spots to Prepare For</h3><div class="flex-col gap-2"><div class="flex items-center gap-2"><span style="color:var(--warning)">!</span><span class="body-sm">Enterprise experience — prepare a bridge from mid-market</span></div><div class="flex items-center gap-2"><span style="color:var(--warning)">!</span><span class="body-sm">Technical depth — be ready to discuss integrations</span></div></div></div>
+    </div>
+    <div class="spacer-lg"></div>
+    <button class="btn btn-primary btn-lg btn-full" onclick="navigate('screen-mock-interview')">Start Mock Interview</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 12: MOCK INTERVIEW SESSION -->
+<!-- ============================================================ -->
+<div id="screen-mock-interview" class="screen screen-full" data-mode="employee" style="background:#111827">
+  <div style="max-width:480px;color:#fff;text-align:center">
+    <p class="caption" style="color:var(--muted);margin-bottom:24px">Mock Interview — CSM Behavioral — 15 min</p>
+    <div class="voice-indicator" style="margin:0 auto 24px"><svg width="28" height="28" fill="#fff" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2" fill="none" stroke="#fff" stroke-width="2"/></svg></div>
+    <p style="font-size:18px;font-weight:500;margin-bottom:8px">"Tell me about a time you had to turn around a dissatisfied customer. What was the situation and what did you do?"</p>
+    <p class="caption" style="color:var(--muted);margin-bottom:32px">Listening...</p>
+    <div style="display:flex;justify-content:center;gap:32px;margin-bottom:24px">
+      <div style="text-align:center"><p class="metric" style="font-size:20px;color:#fff">4:32</p><p class="caption" style="color:var(--muted)">Elapsed</p></div>
+      <div style="text-align:center"><p class="metric" style="font-size:20px;color:#fff">10:28</p><p class="caption" style="color:var(--muted)">Remaining</p></div>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button class="btn btn-secondary" style="border-color:rgba(255,255,255,.2);color:#fff" onclick="navigate('screen-interview-prep')">Pause</button>
+      <button class="btn" style="background:var(--danger);color:#fff" onclick="navigate('screen-interview-feedback')">End Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 13: INTERVIEW FEEDBACK REPORT -->
+<!-- ============================================================ -->
+<div id="screen-interview-feedback" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-fb"></nav>
+  <div class="main">
+    <button class="btn btn-ghost mb-4" onclick="navigate('screen-interview-prep')">&larr; Back to Interview Prep</button>
+    <h1 class="h1 mb-4">Interview Feedback</h1>
+    <div class="grid-3 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted mb-1">Overall</p><div class="score-circle score-mid" style="margin:0 auto"><span>72</span></div></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted mb-1">Clarity</p><div class="score-circle score-mid" style="margin:0 auto"><span>68</span></div></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted mb-1">Specificity</p><div class="score-circle score-mid" style="margin:0 auto"><span>75</span></div></div>
+    </div>
+    <div class="grid-2 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted">Confidence</p><p class="metric" style="color:var(--warning)">70</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Filler Words</p><p class="metric" style="color:var(--warning)">14</p></div>
+    </div>
+    <div class="card mb-4">
+      <h3 class="h3 mb-2" style="color:var(--success)">Strongest Stories</h3>
+      <div class="flex-col gap-2"><div class="body-sm flex items-center gap-2"><span style="color:var(--success)">&#9733;</span> Portfolio retention story (82% → 94%) — specific, evidence-backed, and compelling</div><div class="body-sm flex items-center gap-2"><span style="color:var(--success)">&#9733;</span> Cross-functional onboarding redesign — demonstrated process thinking and measurable outcomes</div></div>
+    </div>
+    <div class="card mb-4">
+      <h3 class="h3 mb-2" style="color:var(--warning)">Answers to Revisit</h3>
+      <div class="flex-col gap-3">
+        <div><p class="body-sm" style="font-weight:500">Q: How do you handle competing priorities?</p><p class="body-sm text-muted">Your answer was generic — mentioned "time management" without a concrete example. Consider using the specific story from Acme where you balanced 3 at-risk accounts while onboarding a new enterprise client.</p></div>
+        <div><p class="body-sm" style="font-weight:500">Q: Tell me about a technical challenge</p><p class="body-sm text-muted">You hesitated and used hedging language. Prepare the Gainsight dashboard story with specific technical details — API integrations, data model choices, impact metrics.</p></div>
+      </div>
+    </div>
+    <div class="card mb-4"><h3 class="h3 mb-2">Next Recommendation</h3><p class="body-sm">Practice technical scenario questions next. Focus on reducing filler words (try pausing instead of saying "um"). Your behavioral answers are strong — lean into the metrics.</p></div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary" onclick="navigate('screen-mock-interview')">Practice Again</button>
+      <button class="btn btn-secondary">Review Full Transcript</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN 14: WEEKLY PLAN & PROGRESS -->
+<!-- ============================================================ -->
+<div id="screen-progress" class="screen app-layout" data-mode="employee">
+  <nav class="sidebar" id="emp-sidebar-prog"></nav>
+  <div class="main">
+    <h1 class="h1 mb-4">Week 2 — Action Plan & Progress</h1>
+    <div class="two-pane">
+      <div>
+        <h2 class="h2 mb-4">This Week's Plan</h2>
+        <div class="flex-col gap-3">
+          <div class="card flex items-center gap-3"><input type="checkbox" checked style="width:18px;height:18px;accent-color:var(--blue)"><div><p class="body-sm" style="font-weight:500">Review 12 high-fit roles</p><p class="caption text-muted">6 remaining</p></div></div>
+          <div class="card flex items-center gap-3"><input type="checkbox" checked style="width:18px;height:18px;accent-color:var(--blue)"><div><p class="body-sm" style="font-weight:500">Pursue 5 jobs</p><p class="caption text-muted">2 completed</p></div></div>
+          <div class="card flex items-center gap-3"><input type="checkbox" style="width:18px;height:18px;accent-color:var(--blue)"><div><p class="body-sm" style="font-weight:500">Send 3 outreach messages</p><p class="caption text-muted">1 sent</p></div></div>
+          <div class="card flex items-center gap-3"><input type="checkbox" style="width:18px;height:18px;accent-color:var(--blue)"><div><p class="body-sm" style="font-weight:500">Complete 2 mock interviews</p><p class="caption text-muted">0 done</p></div></div>
+          <div class="card flex items-center gap-3"><input type="checkbox" style="width:18px;height:18px;accent-color:var(--blue)"><div><p class="body-sm" style="font-weight:500">Update 1 resume bullet with a metric</p><p class="caption text-muted">Not started</p></div></div>
+        </div>
+        <button class="btn btn-ghost mt-4">Regenerate plan</button>
+      </div>
+      <div>
+        <h2 class="h2 mb-4">Progress Tracker</h2>
+        <div class="grid-2 gap-3 mb-4">
+          <div class="card" style="text-align:center"><p class="caption text-muted">Resumes</p><p class="metric" style="color:var(--success)">2/2</p><p class="caption" style="color:var(--success)">Complete</p></div>
+          <div class="card" style="text-align:center"><p class="caption text-muted">LinkedIn</p><p class="metric" style="color:var(--success)">&#10003;</p><p class="caption" style="color:var(--success)">Updated</p></div>
+          <div class="card" style="text-align:center"><p class="caption text-muted">Applications</p><p class="metric">7</p><p class="caption text-muted">Tracked</p></div>
+          <div class="card" style="text-align:center"><p class="caption text-muted">Outreach</p><p class="metric">4</p><p class="caption text-muted">Sent</p></div>
+          <div class="card" style="text-align:center"><p class="caption text-muted">Mock Interviews</p><p class="metric">3</p><p class="caption text-muted">Completed</p></div>
+          <div class="card" style="text-align:center"><p class="caption text-muted">Interviews Landed</p><p class="metric" style="color:var(--success)">1</p><p class="caption text-muted">So far</p></div>
+        </div>
+        <div class="card mb-4"><p class="caption text-muted mb-1">Active Streak</p><p class="body-sm" style="font-weight:600;color:var(--blue)">12 days in a row</p></div>
+        <div class="card"><p class="caption text-muted mb-2">Confidence Over Time</p><div style="display:flex;align-items:flex-end;gap:12px;height:60px">
+          <div style="width:30px;background:var(--blue-light);height:20%;border-radius:4px 4px 0 0" title="Week 1: 2/5"></div>
+          <div style="width:30px;background:var(--blue-light);height:40%;border-radius:4px 4px 0 0" title="Week 2: 3/5"></div>
+          <div style="width:30px;background:var(--blue);height:60%;border-radius:4px 4px 0 0" title="Week 3: 3.5/5"></div>
+          <div style="width:30px;background:var(--blue);height:80%;border-radius:4px 4px 0 0" title="Week 4: 4/5"></div>
+        </div><div class="flex gap-3 mt-1"><span class="caption text-muted">W1</span><span class="caption text-muted">W2</span><span class="caption text-muted">W3</span><span class="caption text-muted">W4</span></div></div>
+        <div class="card mt-4">
+          <p class="caption text-muted mb-2">Milestones</p>
+          <div class="timeline">
+            <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm">Resumes complete</p></div>
+            <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm">First application sent</p></div>
+            <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm">First outreach sent</p></div>
+            <div class="timeline-item"><div class="timeline-dot done"></div><p class="body-sm">First interview landed</p></div>
+            <div class="timeline-item"><div class="timeline-dot pending"></div><p class="body-sm text-muted">Offer received</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EMPLOYER SCREEN E1: COMPANY SETUP -->
+<!-- ============================================================ -->
+<div id="screen-emp-setup" class="screen screen-full" data-mode="employer">
+  <div style="max-width:600px;width:100%;text-align:left">
+    <h1 class="h1 mb-2">Company Setup</h1>
+    <p class="body text-muted mb-4">Set up your company profile. This information will be shown to departing employees when they access Waypointer.</p>
+    <div class="form-group"><label class="label">Company Name</label><input class="input" value="Acme Corp"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="label">Logo</label><div class="upload-zone" style="padding:16px"><p class="body-sm">Upload logo (PNG, SVG)</p></div></div>
+      <div class="form-group"><label class="label">Brand Color</label><div class="flex items-center gap-2"><input class="input" value="#2563EB" style="width:120px"><div style="width:40px;height:40px;border-radius:var(--radius-sm);background:#2563EB;border:1px solid var(--border)"></div></div></div>
+    </div>
+    <div class="form-group"><label class="label">Support Contact Email</label><input class="input" value="hr@acmecorp.com"></div>
+    <div class="form-group"><label class="label">HR Admin Emails (up to 5)</label><input class="input" value="marcus@acmecorp.com"></div>
+    <div class="form-group"><label class="label">Custom Welcome Message</label><textarea class="textarea">We value everything you contributed to Acme. This platform is here to help you land your next role with confidence. — The Acme People Team</textarea></div>
+    <div class="form-group"><label class="label">Default Program Duration</label><select class="select"><option>90 days</option><option>60 days</option><option>120 days</option></select></div>
+    <button class="btn btn-primary btn-lg btn-full" onclick="navigate('screen-emp-program')">Create Transition Program</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EMPLOYER SCREEN E2: PROGRAM SETTINGS -->
+<!-- ============================================================ -->
+<div id="screen-emp-program" class="screen screen-full" data-mode="employer">
+  <div style="max-width:600px;width:100%;text-align:left">
+    <h1 class="h1 mb-2">Program Settings</h1>
+    <p class="body text-muted mb-4">Configure the transition program for this cohort.</p>
+    <div class="card mb-4" style="background:var(--blue-light)">
+      <div class="flex justify-between items-center"><span class="body-sm" style="font-weight:500">Package Tier</span><span class="badge badge-blue">Standard — $149/seat</span></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="label">Total Seats</label><input class="input" type="number" value="90"></div>
+      <div class="form-group"><label class="label">Access Duration</label><select class="select"><option>90 days</option><option>60 days</option><option>120 days</option></select></div>
+    </div>
+    <div class="form-group"><label class="label">Experience Style</label><div class="radio-group"><span class="radio-option selected">Branded (your logo + colors)</span><span class="radio-option">Neutral (Waypointer default)</span></div></div>
+    <div class="form-row">
+      <div class="form-group"><label class="label">Interview Coaching</label><div class="flex items-center gap-2"><div style="width:44px;height:24px;border-radius:12px;background:var(--blue);position:relative;cursor:pointer"><div style="width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;right:2px"></div></div><span class="body-sm">Enabled</span></div></div>
+      <div class="form-group"><label class="label">Outreach Builder</label><div class="flex items-center gap-2"><div style="width:44px;height:24px;border-radius:12px;background:var(--blue);position:relative;cursor:pointer"><div style="width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;right:2px"></div></div><span class="body-sm">Enabled</span></div></div>
+    </div>
+    <div class="form-group"><label class="label">Custom Intro Message (optional)</label><textarea class="textarea" placeholder="Shown to employees after they sign in"></textarea></div>
+    <button class="btn btn-primary btn-lg btn-full" onclick="navigate('screen-emp-invite')">Save Program</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EMPLOYER SCREEN E3: INVITE EMPLOYEES -->
+<!-- ============================================================ -->
+<div id="screen-emp-invite" class="screen screen-full" data-mode="employer">
+  <div style="max-width:700px;width:100%;text-align:left">
+    <h1 class="h1 mb-2">Invite Employees</h1>
+    <p class="body text-muted mb-4">Add employees to the transition program. They'll receive a personalized invitation email from Waypointer.</p>
+    <div class="grid-2 mb-4">
+      <div class="card" style="text-align:center"><p class="metric" style="color:var(--blue)">90</p><p class="caption text-muted">Seats Purchased</p></div>
+      <div class="card" style="text-align:center"><p class="metric">0</p><p class="caption text-muted">Seats Used</p></div>
+    </div>
+    <div class="tab-bar"><div class="tab active">CSV Upload</div><div class="tab" onclick="this.parentNode.querySelector('.active').classList.remove('active');this.classList.add('active')">Manual Add</div></div>
+    <div class="upload-zone mb-4" onclick="simulateCSVUpload(this)">
+      <svg width="32" height="32" fill="none" viewBox="0 0 24 24" style="margin:0 auto 8px"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p class="body-sm" style="font-weight:500">Upload CSV file</p>
+      <p class="caption text-muted">Columns: employee_name, email, department, role_family, last_day</p>
+      <button class="btn btn-ghost btn-sm mt-2">Download CSV template</button>
+    </div>
+    <div id="csv-preview" style="display:none">
+      <div class="card mb-4">
+        <div class="flex justify-between items-center mb-2"><h3 class="h3">Preview — 90 employees</h3><span class="badge badge-success">All valid</span></div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px">Name</th><th style="padding:8px">Email</th><th style="padding:8px">Department</th><th style="padding:8px">Status</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">Maya Chen</td><td style="padding:8px">maya@acmecorp.com</td><td style="padding:8px">Customer Success</td><td style="padding:8px"><span class="badge badge-success">Ready</span></td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">James Rivera</td><td style="padding:8px">james.r@acmecorp.com</td><td style="padding:8px">Engineering</td><td style="padding:8px"><span class="badge badge-success">Ready</span></td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">Priya Patel</td><td style="padding:8px">priya.p@acmecorp.com</td><td style="padding:8px">Marketing</td><td style="padding:8px"><span class="badge badge-success">Ready</span></td></tr>
+              <tr><td style="padding:8px" class="text-muted" colspan="4">...and 87 more</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg btn-full" onclick="navigate('screen-emp-dashboard')">Send 90 Invites</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EMPLOYER SCREEN E4: EMPLOYER DASHBOARD -->
+<!-- ============================================================ -->
+<div id="screen-emp-dashboard" class="screen app-layout" data-mode="employer">
+  <nav class="sidebar sidebar-employer" id="emp-sidebar-dash">
+    <div class="sidebar-logo"><svg width="24" height="24" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="#7C3AED"/><path d="M16 24l6 6 10-12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Waypointer</div>
+    <div class="sidebar-nav">
+      <a class="nav-item active" onclick="navigateEmployerNav(this,'screen-emp-dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4h4v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg> Overview</a>
+      <a class="nav-item" onclick="navigateEmployerNav(this,'screen-emp-invite')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6m3-3h-6"/></svg> Employees</a>
+      <a class="nav-item" onclick="navigateEmployerNav(this,'screen-emp-program')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Program</a>
+      <a class="nav-item" onclick="navigateEmployerNav(this,'screen-emp-outcomes')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Reporting</a>
+    </div>
+    <div class="sidebar-footer"><p class="body-sm text-muted">Marcus Williams</p><p class="caption text-muted">Acme Corp</p></div>
+  </nav>
+  <div class="main">
+    <h1 class="h1 mb-4">Employer Dashboard</h1>
+    <div class="grid-3 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted">Seats Activated</p><p class="metric" style="color:var(--blue)">71<span style="font-size:16px;color:var(--text-secondary)">/90</span></p><p class="caption" style="color:var(--success)">78.9%</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Onboarding Complete</p><p class="metric">65</p><p class="caption" style="color:var(--success)">91.5% of activated</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Resume Complete</p><p class="metric">58</p><p class="caption">81.7% of activated</p></div>
+    </div>
+    <div class="grid-3 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted">Interview Practice</p><p class="metric">34</p><p class="caption">47.9%</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Weekly Active</p><p class="metric" style="color:var(--success)">52</p><p class="caption" style="color:var(--success)">73.2%</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Avg Satisfaction</p><p class="metric" style="color:var(--success)">4.2<span style="font-size:14px">/5</span></p></div>
+    </div>
+    <div class="grid-2 mb-4">
+      <div class="card">
+        <h3 class="h3 mb-2">Activations Over Time</h3>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:100px">
+          <div style="flex:1;background:var(--blue-light);height:15%;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;background:var(--blue-light);height:35%;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;background:var(--blue);height:65%;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;background:var(--blue);height:85%;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;background:var(--blue);height:92%;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;background:var(--blue);height:95%;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;background:var(--blue);height:100%;border-radius:4px 4px 0 0"></div>
+        </div>
+        <div class="flex justify-between mt-1"><span class="caption text-muted">Day 1</span><span class="caption text-muted">Day 7</span></div>
+      </div>
+      <div class="card">
+        <h3 class="h3 mb-2">Engagement by Module</h3>
+        <div class="flex-col gap-2">
+          <div><div class="flex justify-between body-sm"><span>Resume</span><span>142 uses</span></div><div class="progress-bar mt-1"><div class="progress-bar-fill" style="width:100%"></div></div></div>
+          <div><div class="flex justify-between body-sm"><span>Jobs</span><span>98 uses</span></div><div class="progress-bar mt-1"><div class="progress-bar-fill" style="width:69%"></div></div></div>
+          <div><div class="flex justify-between body-sm"><span>Outreach</span><span>76 uses</span></div><div class="progress-bar mt-1"><div class="progress-bar-fill" style="width:54%"></div></div></div>
+          <div><div class="flex justify-between body-sm"><span>Interviews</span><span>54 uses</span></div><div class="progress-bar mt-1"><div class="progress-bar-fill" style="width:38%"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex justify-between items-center"><div><h3 class="h3">Inactive Users</h3><p class="body-sm text-muted">8 employees haven't logged in for 7+ days</p></div><button class="btn btn-secondary btn-sm" onclick="showToast('Re-engagement emails sent to 8 inactive users')">Send Re-engagement Email</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EMPLOYER SCREEN E5: TRANSITION OUTCOMES -->
+<!-- ============================================================ -->
+<div id="screen-emp-outcomes" class="screen app-layout" data-mode="employer">
+  <nav class="sidebar sidebar-employer" id="emp-sidebar-out2"></nav>
+  <div class="main">
+    <h1 class="h1 mb-4">Transition Outcomes</h1>
+    <div class="grid-3 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted">Engaged (3+ logins)</p><p class="metric" style="color:var(--success)">85%</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Interview Ready</p><p class="metric">62%</p><p class="caption text-muted">Resume + mock interview done</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Avg Time to Interview</p><p class="metric">18<span style="font-size:14px"> days</span></p></div>
+    </div>
+    <div class="grid-3 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted">Confidence Lift</p><p class="metric" style="color:var(--success)">+2.1</p><p class="caption text-muted">on 1–5 scale</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Placement Rate (opt-in)</p><p class="metric">34%</p><p class="caption text-muted">Based on 24 self-reports</p></div>
+      <div class="card" style="text-align:center"><p class="caption text-muted">Avg Time to Placement</p><p class="metric">47<span style="font-size:14px"> days</span></p></div>
+    </div>
+    <div class="grid-2 mb-4">
+      <div class="card" style="text-align:center"><p class="caption text-muted">Satisfaction</p><p class="metric" style="color:var(--success)">4.3<span style="font-size:14px">/5</span></p></div>
+      <div class="card"><p class="caption text-muted mb-2">Note</p><p class="body-sm">Based on 24 self-reports. Encourage employees to share their outcomes to improve this data.</p></div>
+    </div>
+    <h2 class="h2 mb-4">Export Reports</h2>
+    <div class="grid-3">
+      <div class="card card-hover" style="text-align:center;cursor:pointer"><svg width="32" height="32" fill="none" viewBox="0 0 24 24" style="margin:0 auto 8px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="var(--danger)" stroke-width="2"/><path d="M14 2v6h6" stroke="var(--danger)" stroke-width="2"/></svg><p class="body-sm" style="font-weight:500">PDF Summary</p><p class="caption text-muted">Board-ready report</p></div>
+      <div class="card card-hover" style="text-align:center;cursor:pointer"><svg width="32" height="32" fill="none" viewBox="0 0 24 24" style="margin:0 auto 8px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="var(--success)" stroke-width="2"/><path d="M14 2v6h6" stroke="var(--success)" stroke-width="2"/></svg><p class="body-sm" style="font-weight:500">CSV Data Export</p><p class="caption text-muted">Raw usage data</p></div>
+      <div class="card card-hover" style="text-align:center;cursor:pointer"><svg width="32" height="32" fill="none" viewBox="0 0 24 24" style="margin:0 auto 8px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="var(--blue)" stroke-width="2"/><path d="M14 2v6h6" stroke="var(--blue)" stroke-width="2"/></svg><p class="body-sm" style="font-weight:500">Brand Support</p><p class="caption text-muted">Employer brand narrative</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<script>
+// ===== NAVIGATION ENGINE =====
+let currentScreen = 'screen-welcome';
+let currentMode = 'employee';
+
+function navigate(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById(screenId);
+  if (target) {
+    target.classList.add('active');
+    currentScreen = screenId;
+    // Clone sidebar for app-layout screens
+    cloneSidebar(screenId);
+    // Update mode buttons
+    const mode = target.dataset.mode;
+    if (mode && mode !== currentMode) {
+      currentMode = mode;
+      updateModeButtons();
+    }
+  }
+  window.scrollTo(0, 0);
+}
+
+function navigateWithNav(el, screenId) {
+  document.querySelectorAll('#emp-sidebar .nav-item, [id^="emp-sidebar"] .nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  navigate(screenId);
+}
+
+function navigateEmployerNav(el, screenId) {
+  el.closest('.sidebar').querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  navigate(screenId);
+}
+
+// Clone employee sidebar into screens that need it
+function cloneSidebar(screenId) {
+  const empScreens = ['screen-resume','screen-linkedin','screen-jobs','screen-job-detail','screen-outreach','screen-interview-prep','screen-interview-feedback','screen-progress'];
+  const empSidebarIds = ['emp-sidebar-resume','emp-sidebar-li','emp-sidebar-jobs','emp-sidebar-jd','emp-sidebar-out','emp-sidebar-int','emp-sidebar-fb','emp-sidebar-prog'];
+
+  const idx = empScreens.indexOf(screenId);
+  if (idx !== -1) {
+    const source = document.getElementById('emp-sidebar');
+    const target = document.getElementById(empSidebarIds[idx]);
+    if (source && target && !target.hasChildNodes()) {
+      target.innerHTML = source.innerHTML;
+    }
+    // Activate correct nav item
+    const navMap = {'screen-dashboard':0,'screen-resume':1,'screen-linkedin':2,'screen-jobs':3,'screen-job-detail':3,'screen-outreach':4,'screen-interview-prep':5,'screen-mock-interview':5,'screen-interview-feedback':5,'screen-progress':6};
+    const navIdx = navMap[screenId];
+    if (navIdx !== undefined) {
+      const navItems = document.getElementById(empSidebarIds[idx]).querySelectorAll('.nav-item');
+      navItems.forEach((n,i) => {n.classList.toggle('active', i === navIdx);});
+    }
+  }
+
+  // Employer screens sidebar clone
+  const empOutScreens = ['screen-emp-outcomes'];
+  if (screenId === 'screen-emp-outcomes') {
+    const source = document.getElementById('emp-sidebar-dash');
+    const target = document.getElementById('emp-sidebar-out2');
+    if (source && target && !target.hasChildNodes()) {
+      target.innerHTML = source.innerHTML;
+    }
+    const navItems = target.querySelectorAll('.nav-item');
+    navItems.forEach(n => n.classList.remove('active'));
+    if (navItems[3]) navItems[3].classList.add('active');
+  }
+}
+
+// ===== MODE SWITCHER =====
+function switchMode(mode) {
+  currentMode = mode;
+  updateModeButtons();
+  if (mode === 'employee') navigate('screen-welcome');
+  else navigate('screen-emp-setup');
+}
+
+function updateModeButtons() {
+  const btns = document.querySelectorAll('.mode-btn');
+  btns.forEach(b => {b.classList.remove('active','active-employer')});
+  if (currentMode === 'employee') btns[0].classList.add('active');
+  else btns[1].classList.add('active-employer');
+}
+
+// ===== SIMULATE INTERACTIONS =====
+function simulateUpload(el) {
+  el.innerHTML = '<p class="body-sm" style="color:var(--success);font-weight:500">&#10003; Maya_Chen_Resume.pdf uploaded</p>';
+  document.getElementById('upload-success').style.display = 'block';
+}
+
+function simulateCSVUpload(el) {
+  el.innerHTML = '<p class="body-sm" style="color:var(--success);font-weight:500">&#10003; acme_employees.csv — 90 rows loaded</p>';
+  document.getElementById('csv-preview').style.display = 'block';
+}
+
+function togglePath(card) {
+  const isSelected = card.dataset.selected === 'true';
+  if (isSelected) {
+    card.classList.remove('card-selected');
+    card.dataset.selected = 'false';
+    const primaryBadge = card.querySelector('.badge-blue');
+    if (primaryBadge && primaryBadge.textContent === 'Primary') primaryBadge.remove();
+  } else {
+    card.classList.add('card-selected');
+    card.dataset.selected = 'true';
+  }
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 4000);
+}
+
+// Init
+navigate('screen-welcome');
+</script>
+</body>
+</html>
