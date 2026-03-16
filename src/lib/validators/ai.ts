@@ -313,3 +313,18 @@ export const generateOutreachSchema = z.object({
 
 export type OutreachGuidance = z.infer<typeof outreachGuidanceSchema>;
 export type GenerateOutreachOutput = z.infer<typeof generateOutreachSchema>;
+
+// ─── GENERATE_INTERVIEW_PREP (PR Prompt 14) ─────────────────────────
+
+export const generateInterviewPrepSchema = z.object({
+  common_questions: z.array(z.string().min(1)).min(5).max(8),
+  behavioral_questions: z.array(z.string().min(1)).min(5).max(8),
+  company_specific: z.array(z.string()).max(5),
+  strengths_to_emphasize: z.array(z.string().min(1)).min(3).max(5),
+  weak_spots_to_prepare: z.array(z.string().min(1)).min(2).max(3),
+  compensation_prep: z.string().min(1),
+});
+
+export type GenerateInterviewPrepOutput = z.infer<
+  typeof generateInterviewPrepSchema
+>;
