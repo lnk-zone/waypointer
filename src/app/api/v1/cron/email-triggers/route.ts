@@ -44,6 +44,7 @@ interface TriggerCounters {
   sent: number;
   skipped: number;
   failed: number;
+  error?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ async function processReengagement(
   ).toISOString();
 
   const { data: seats } = await supabase
-    .from("program_seats")
+    .from("seats")
     .select("id, employee_email, employee_name, status, program_id, created_at, activated_at")
     .eq("status", "invited")
     .lte("created_at", threshold)
@@ -197,7 +198,7 @@ async function processWeeklyNudges(
   results: Record<string, TriggerCounters>
 ): Promise<void> {
   const { data: seats } = await supabase
-    .from("program_seats")
+    .from("seats")
     .select("id, employee_email, employee_name, status, program_id, created_at, activated_at")
     .in("status", ["activated", "active"])
     .limit(MAX_BATCH_SIZE);
@@ -234,19 +235,27 @@ async function processWeeklyNudges(
         continue;
       }
 
-      // Try to get job match count — optional, graceful failure
+      // Try to get job match count via employee profile — optional, graceful failure
       let jobMatchCount: number | undefined;
       try {
-        const { count } = await supabase
-          .from("job_matches")
-          .select("id", { count: "exact", head: true })
-          .eq("seat_id", seat.id);
+        const { data: empProfile } = await supabase
+          .from("employee_profiles")
+          .select("id")
+          .eq("seat_id", seat.id)
+          .single();
 
-        if (count !== null && count > 0) {
-          jobMatchCount = count;
+        if (empProfile) {
+          const { count } = await supabase
+            .from("job_matches")
+            .select("id", { count: "exact", head: true })
+            .eq("employee_id", (empProfile as unknown as { id: string }).id);
+
+          if (count !== null && count > 0) {
+            jobMatchCount = count;
+          }
         }
       } catch {
-        // Table may not exist yet — proceed without count
+        // Tables may not exist or employee not yet profiled — proceed without count
       }
 
       const templateData = buildTemplateData(seat, company, baseUrl, {
@@ -286,7 +295,7 @@ async function processThirtyDayCheckins(
   ).toISOString();
 
   const { data: seats } = await supabase
-    .from("program_seats")
+    .from("seats")
     .select("id, employee_email, employee_name, status, program_id, created_at, activated_at")
     .in("status", ["activated", "active"])
     .not("activated_at", "is", null)
@@ -333,8 +342,54 @@ async function processThirtyDayCheckins(
           )
         : 30;
 
+      // Fetch progress metrics for the check-in email
+      let progressSummary: string | undefined;
+      try {
+        const { data: empProfile } = await supabase
+          .from("employee_profiles")
+          .select("id")
+          .eq("seat_id", seat.id)
+          .single();
+
+        if (empProfile) {
+          const empId = (empProfile as unknown as { id: string }).id;
+          const [resumeRes, interviewRes, jobMatchRes] = await Promise.all([
+            supabase
+              .from("resumes")
+              .select("id", { count: "exact", head: true })
+              .eq("employee_id", empId),
+            supabase
+              .from("interview_sessions")
+              .select("id", { count: "exact", head: true })
+              .eq("employee_id", empId),
+            supabase
+              .from("job_matches")
+              .select("id", { count: "exact", head: true })
+              .eq("employee_id", empId),
+          ]);
+
+          const parts: string[] = [];
+          if (resumeRes.count && resumeRes.count > 0) {
+            parts.push(`${resumeRes.count} resume${resumeRes.count > 1 ? "s" : ""} created`);
+          }
+          if (interviewRes.count && interviewRes.count > 0) {
+            parts.push(`${interviewRes.count} interview${interviewRes.count > 1 ? "s" : ""} completed`);
+          }
+          if (jobMatchRes.count && jobMatchRes.count > 0) {
+            parts.push(`${jobMatchRes.count} job match${jobMatchRes.count > 1 ? "es" : ""} found`);
+          }
+
+          if (parts.length > 0) {
+            progressSummary = parts.join(" · ");
+          }
+        }
+      } catch {
+        // Progress fetch is optional — proceed without summary
+      }
+
       const templateData = buildTemplateData(seat, company, baseUrl, {
         daysSinceActivation,
+        progressSummary,
       });
 
       const result = await sendTrackedEmail({
@@ -365,7 +420,10 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
 
   if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Invalid or missing cron secret" } },
+      { status: 401 }
+    );
   }
 
   const supabase = createServiceClient();
@@ -379,19 +437,19 @@ export async function GET(request: NextRequest) {
   try {
     await processReengagement(supabase, results);
   } catch {
-    // Trigger-level failure — logged in counters, does not block other triggers
+    results.reengagement.error = "Trigger processing failed";
   }
 
   try {
     await processWeeklyNudges(supabase, results);
   } catch {
-    // Trigger-level failure — logged in counters, does not block other triggers
+    results.weekly_nudge.error = "Trigger processing failed";
   }
 
   try {
     await processThirtyDayCheckins(supabase, results);
   } catch {
-    // Trigger-level failure — logged in counters, does not block other triggers
+    results.thirty_day_checkin.error = "Trigger processing failed";
   }
 
   return NextResponse.json({ data: results });

@@ -71,8 +71,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let body: unknown;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid JSON body");
+  }
+
+  try {
     const parsed = reengageSchema.safeParse(body);
 
     if (!parsed.success) {
