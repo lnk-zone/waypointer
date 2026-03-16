@@ -196,7 +196,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 animate-fade-in">
       <div className="mb-8">
         <WaypointerLogo variant="mark" size={40} />
       </div>

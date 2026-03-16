@@ -602,11 +602,11 @@ function OutreachContent() {
               <div className="rounded-md border border-border bg-surface p-8 text-center">
                 <MessageSquare className="h-10 w-10 text-primary/30 mx-auto mb-3" />
                 <h3 className="text-sm font-medium text-text-primary mb-1">
-                  No messages generated yet
+                  Generate your first outreach message to get started
                 </h3>
                 <p className="text-xs text-text-secondary max-w-sm mx-auto">
-                  Select a recipient type and fill in the context to generate
-                  personalized outreach messages.
+                  Select a recipient type and fill in the context above to
+                  create personalized outreach messages.
                 </p>
               </div>
             )}

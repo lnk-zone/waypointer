@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E13-02 (Responsive Layouts)
-Currently working: E13-03
-Next up: E14-01
+Last completed: E13-03 (Empty, Loading, and Error States)
+Currently working: E14-01
+Next up: E14-02

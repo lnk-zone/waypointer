@@ -497,6 +497,14 @@ function ProgressTracker() {
     );
   }
 
+  const hasAnyActivity =
+    data.resumes_completed > 0 ||
+    data.linkedin_updated ||
+    data.applications_tracked > 0 ||
+    data.outreach_sent > 0 ||
+    data.interviews_practiced > 0 ||
+    data.interviews_landed > 0;
+
   return (
     <div className="mt-8 pt-8 border-t border-border space-y-6">
       {/* Section header */}
@@ -506,6 +514,22 @@ function ProgressTracker() {
           Progress Tracker
         </h2>
       </div>
+
+      {/* Zero-activity empty state */}
+      {!hasAnyActivity && (
+        <div className="rounded-lg border border-border bg-surface p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+            <BarChart3 className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold text-text-primary mb-2">
+            Complete your first action to see progress
+          </h3>
+          <p className="text-sm text-text-secondary max-w-sm mx-auto">
+            Generate a resume, update your LinkedIn, or start a mock interview
+            to begin tracking your transition progress.
+          </p>
+        </div>
+      )}
 
       {/* Readiness bar */}
       <ReadinessBar milestones={data.milestones} />

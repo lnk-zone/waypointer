@@ -59,7 +59,7 @@ function ActivateContent() {
   }, [token, router]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 animate-fade-in">
       <div className={state === "activating" ? "animate-logo-pulse" : ""}>
         <WaypointerLogo size={48} variant="mark" />
       </div>

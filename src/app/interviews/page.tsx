@@ -362,11 +362,11 @@ function InterviewsContent() {
         <div className="rounded-md border border-border bg-surface p-8 text-center">
           <BookOpen className="h-10 w-10 text-primary/30 mx-auto mb-3" />
           <h3 className="text-sm font-medium text-text-primary mb-1">
-            Select a role path to get started
+            Start your first mock interview to practice
           </h3>
           <p className="text-xs text-text-secondary max-w-sm mx-auto">
-            Choose a target role above and we&apos;ll generate personalized
-            interview prep materials.
+            Select a role path above and we&apos;ll generate personalized
+            interview prep materials to help you prepare.
           </p>
         </div>
       )}

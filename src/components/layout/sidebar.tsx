@@ -87,7 +87,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 ml-16 lg:ml-[240px] transition-default">
+      <main className="flex-1 ml-16 lg:ml-[240px] transition-default animate-fade-in">
         {children}
       </main>
     </div>
