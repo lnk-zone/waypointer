@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E13-01 (Component Library)
-Currently working: E13-02 (Responsive Layouts)
+Last completed: E13-02 (Responsive Layouts)
+Currently working: E13-03
 Next up: E14-01
