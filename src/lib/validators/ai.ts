@@ -328,3 +328,39 @@ export const generateInterviewPrepSchema = z.object({
 export type GenerateInterviewPrepOutput = z.infer<
   typeof generateInterviewPrepSchema
 >;
+
+// ─── ANALYZE_INTERVIEW (PR Prompt 13) ───────────────────────────────
+
+export const answerAnalysisSchema = z.object({
+  question: z.string().min(1),
+  answer_summary: z.string().min(1),
+  quality: z.enum(["strong", "adequate", "weak"]),
+  feedback: z.string().min(1),
+});
+
+export const weakAnswerSchema = z.object({
+  question: z.string().min(1),
+  issue: z.string().min(1),
+  suggested_approach: z.string().min(1),
+});
+
+export const analyzeInterviewSchema = z.object({
+  overall_score: z.number().int().min(0).max(100),
+  overall_summary: z.string().min(1),
+  clarity_score: z.number().int().min(0).max(100),
+  clarity_notes: z.string().min(1),
+  specificity_score: z.number().int().min(0).max(100),
+  specificity_notes: z.string().min(1),
+  confidence_score: z.number().int().min(0).max(100),
+  confidence_notes: z.string().min(1),
+  filler_word_count: z.number().int().min(0),
+  filler_words_noted: z.array(z.string()),
+  answer_analyses: z.array(answerAnalysisSchema).min(1),
+  strongest_stories: z.array(z.string().min(1)).min(1).max(5),
+  weak_answers: z.array(weakAnswerSchema),
+  next_recommendation: z.string().min(1),
+});
+
+export type AnswerAnalysis = z.infer<typeof answerAnalysisSchema>;
+export type WeakAnswer = z.infer<typeof weakAnswerSchema>;
+export type AnalyzeInterviewOutput = z.infer<typeof analyzeInterviewSchema>;

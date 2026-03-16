@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EmployeeRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,7 @@ const DIFFICULTY_OPTIONS = [
 
 function InterviewsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Role paths
   const [paths, setPaths] = useState<RolePath[]>([]);
@@ -152,6 +153,17 @@ function InterviewsContent() {
     }
     fetchData();
   }, []);
+
+  // Auto-open mock interview modal when navigated with ?start_mock=true
+  useEffect(() => {
+    if (searchParams.get("start_mock") === "true" && paths.length > 0) {
+      const pathIdParam = searchParams.get("path_id");
+      if (pathIdParam && paths.some((p) => p.id === pathIdParam)) {
+        setSelectedPathId(pathIdParam);
+      }
+      setShowModal(true);
+    }
+  }, [searchParams, paths]);
 
   // Check ElevenLabs availability when modal opens
   useEffect(() => {
