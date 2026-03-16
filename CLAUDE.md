@@ -194,6 +194,6 @@ When all three gates pass for an issue, before advancing you must:
 
 ## Current Status
 
-Last completed: E6-02 (Resume Workspace Screen)
-Currently working: E6-03 (Resume Download — PDF and DOCX)
-Next up: E6-04
+Last completed: E6-03 (Resume Download — PDF and DOCX)
+Currently working: E6-04 (LinkedIn Optimizer)
+Next up: E7-01

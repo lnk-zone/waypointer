@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Check,
   ChevronDown,
+  Download,
   Edit3,
   FileText,
   Lightbulb,
@@ -151,6 +152,7 @@ function ResumeWorkspace() {
   const [generating, setGenerating] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState<"pdf" | "docx" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [contextMsg, setContextMsg] = useState(CONTEXTUAL_MESSAGES[0].text);
   const [longWait, setLongWait] = useState(false);
@@ -439,6 +441,52 @@ function ResumeWorkspace() {
     setEditingField(null);
     setEditValue("");
   }, []);
+
+  // ─── Download handler ──────────────────────────────────────────
+
+  const handleDownload = useCallback(
+    async (format: "pdf" | "docx") => {
+      const resume = resumes[activeTab];
+      if (!resume || downloading) return;
+
+      setDownloading(format);
+      setError(null);
+
+      try {
+        const res = await fetch(
+          `/api/v1/employee/resume/${resume.resume_id}/download`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ format }),
+          }
+        );
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(
+            body?.error?.message ?? `Failed to generate ${format.toUpperCase()}`
+          );
+        }
+
+        const data = await res.json();
+        const anchor = document.createElement("a");
+        anchor.href = data.data.download_url;
+        anchor.download = `resume.${format}`;
+        anchor.rel = "noopener noreferrer";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Download failed"
+        );
+      } finally {
+        setDownloading(null);
+      }
+    },
+    [resumes, activeTab, downloading]
+  );
 
   // ─── Current resume ──────────────────────────────────────────────
 
@@ -934,6 +982,47 @@ function ResumeWorkspace() {
                     Regenerating with new tone...
                   </div>
                 )}
+              </div>
+
+              {/* Download */}
+              <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Download Resume
+                </h3>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownload("pdf")}
+                    disabled={!!downloading}
+                    className="flex-1"
+                  >
+                    {downloading === "pdf" ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Generating...
+                      </span>
+                    ) : (
+                      "PDF"
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownload("docx")}
+                    disabled={!!downloading}
+                    className="flex-1"
+                  >
+                    {downloading === "docx" ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Generating...
+                      </span>
+                    ) : (
+                      "DOCX"
+                    )}
+                  </Button>
+                </div>
               </div>
 
               {/* Missing Metrics */}
