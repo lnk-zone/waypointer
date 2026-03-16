@@ -2,13 +2,13 @@
  * POST /api/v1/employer/reengage
  *
  * Triggers re-engagement emails for inactive users.
- * Email sending is implemented in E12 — this endpoint marks users for
- * re-engagement and returns the count.
+ * Finds employees with no activity in the threshold period, checks
+ * deduplication, and sends tracked re-engagement emails.
  *
- * Uses Edge Runtime — lightweight JSON processing.
+ * Uses Node.js Runtime — email sending needs Node APIs.
  */
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -19,6 +19,8 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { z } from "zod";
+import { sendTrackedEmail, hasRecentEmail } from "@/lib/email/send-tracked";
+import type { EmailTemplateData } from "@/lib/email/templates";
 
 // ─── Request Validation ───────────────────────────────────────────────
 
@@ -43,6 +45,14 @@ interface EmployeeRecord {
 interface ActivityDateRecord {
   employee_id: string;
   created_at: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "https://getwaypointer.com";
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────
@@ -101,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     const seats = (rawSeats as unknown as SeatRecord[] | null) ?? [];
     if (seats.length === 0) {
-      return NextResponse.json({ data: { emails_sent: 0 } });
+      return NextResponse.json({ data: { sent: 0, skipped: 0, failed: 0 } });
     }
 
     const seatIds = seats.map((s) => s.id);
@@ -115,7 +125,7 @@ export async function POST(request: NextRequest) {
     const employees =
       (rawEmployees as unknown as EmployeeRecord[] | null) ?? [];
     if (employees.length === 0) {
-      return NextResponse.json({ data: { emails_sent: 0 } });
+      return NextResponse.json({ data: { sent: 0, skipped: 0, failed: 0 } });
     }
 
     const employeeIds = employees.map((e) => e.id);
@@ -142,16 +152,86 @@ export async function POST(request: NextRequest) {
       (id) => !recentlyActive.has(id)
     );
 
-    // Email sending is deferred to E12. For now, we record the reengage
-    // action and return the count.
+    if (inactiveEmployeeIds.length === 0) {
+      return NextResponse.json({
+        data: { sent: 0, skipped: 0, failed: 0 },
+      });
+    }
 
-    if (inactiveEmployeeIds.length > 0) {
-      // Log the re-engagement action (fire-and-forget)
+    // Build a lookup from employee ID → seat record
+    const employeeToSeat = new Map<string, SeatRecord>();
+    for (const emp of employees) {
+      const seat = seats.find((s) => s.id === emp.seat_id);
+      if (seat) employeeToSeat.set(emp.id, seat);
+    }
+
+    // Fetch company name for branding
+    const { data: rawCompany } = await supabase
+      .from("companies")
+      .select("id, name")
+      .eq("id", auth.companyId)
+      .single();
+    const companyName =
+      (rawCompany as unknown as { name: string } | null)?.name ??
+      "Your Company";
+
+    const baseUrl = getBaseUrl();
+    let sent = 0;
+    let skipped = 0;
+    let failed = 0;
+    const sentEmployeeIds: string[] = [];
+
+    // Process seats sequentially to respect rate limits
+    for (const empId of inactiveEmployeeIds) {
+      const seat = employeeToSeat.get(empId);
+      if (!seat) {
+        skipped++;
+        continue;
+      }
+
+      // Deduplication — skip if a re-engagement email was sent within 72h
+      const recentlySent = await hasRecentEmail(
+        supabase,
+        seat.id,
+        "reengagement_72h",
+        72
+      );
+      if (recentlySent) {
+        skipped++;
+        continue;
+      }
+
+      const templateData: EmailTemplateData = {
+        recipientName: seat.employee_name ?? "there",
+        companyName,
+        loginLink: `${baseUrl}/login`,
+        unsubscribeLink: `${baseUrl}/unsubscribe?seat=${seat.id}`,
+      };
+
+      const result = await sendTrackedEmail({
+        supabase,
+        seatId: seat.id,
+        recipientEmail: seat.employee_email,
+        templateType: "reengagement_72h",
+        templateData,
+        baseUrl,
+      });
+
+      if (result.success) {
+        sent++;
+        sentEmployeeIds.push(empId);
+      } else {
+        failed++;
+      }
+    }
+
+    // Log the re-engagement action for sent emails (fire-and-forget)
+    if (sentEmployeeIds.length > 0) {
       Promise.resolve(
         supabase.from("activity_log").insert(
-          inactiveEmployeeIds.map((empId) => ({
+          sentEmployeeIds.map((empId) => ({
             employee_id: empId,
-            action: "reengage_email_queued",
+            action: "reengage_email_sent",
             metadata: {
               program_id,
               triggered_by: auth.user.id,
@@ -163,9 +243,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      data: {
-        emails_sent: inactiveEmployeeIds.length,
-      },
+      data: { sent, skipped, failed },
     });
   } catch {
     return apiError(
