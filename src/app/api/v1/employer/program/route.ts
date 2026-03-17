@@ -1,56 +1,96 @@
 /**
- * POST /api/v1/employer/program — Create a new transition program.
- * PUT  /api/v1/employer/program — Update the active transition program.
+ * POST /api/v1/employer/program — Create a new program.
+ * GET  /api/v1/employer/program — List all programs.
+ * PUT  /api/v1/employer/program — Update a program by ID.
  *
- * Auth: Employer admin only.
- * Uses Edge Runtime — lightweight JSON endpoint.
+ * Programs are organizational containers only — no seats, tiers, or duration.
  */
-
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  authenticateRequest,
-  isAuthError,
-  requireEmployer,
-} from "@/lib/api/auth-middleware";
+import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { programSchema } from "@/lib/validators/program";
-
-// ─── Types ────────────────────────────────────────────────────────────
+import { z } from "zod";
 
 interface ProgramRecord {
   id: string;
   company_id: string;
   name: string;
-  tier: string;
-  total_seats: number;
-  used_seats: number;
-  access_duration_days: number;
-  is_branded: boolean;
   custom_intro_message: string | null;
-  interview_coaching_enabled: boolean;
-  outreach_builder_enabled: boolean;
+  is_branded: boolean;
   is_active: boolean;
   created_at: string;
 }
 
-// ─── Route Handler ────────────────────────────────────────────────────
+// ─── GET: List all programs ──────────────────────────────────────────
 
-export async function POST(request: NextRequest) {
-  // Auth
+export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if (isAuthError(auth)) return auth;
-
   const roleError = requireEmployer(auth);
   if (roleError) return roleError;
-
   if (!auth.companyId) {
-    return apiError(
-      ERROR_CODES.NOT_FOUND,
-      "No company found. Please complete company setup first."
-    );
+    return apiError(ERROR_CODES.NOT_FOUND, "No company found.");
+  }
+
+  try {
+    const supabase = createServiceClient();
+
+    const { data: programs, error } = await supabase
+      .from("transition_programs")
+      .select("id, company_id, name, custom_intro_message, is_branded, is_active, created_at")
+      .eq("company_id", auth.companyId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to fetch programs");
+    }
+
+    // Get employee count per program
+    const programIds = (programs ?? []).map((p: Record<string, unknown>) => p.id as string);
+    const countsMap: Record<string, number> = {};
+
+    if (programIds.length > 0) {
+      const { data: seats } = await supabase
+        .from("seats")
+        .select("program_id")
+        .in("program_id", programIds);
+
+      if (seats) {
+        for (const seat of seats as Array<{ program_id: string }>) {
+          countsMap[seat.program_id] = (countsMap[seat.program_id] || 0) + 1;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      data: (programs ?? []).map((p: Record<string, unknown>) => ({
+        id: p.id,
+        name: p.name,
+        custom_intro_message: p.custom_intro_message,
+        is_branded: p.is_branded,
+        is_active: p.is_active,
+        created_at: p.created_at,
+        employee_count: countsMap[p.id as string] || 0,
+      })),
+    });
+  } catch {
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to fetch programs");
+  }
+}
+
+// ─── POST: Create a program ─────────────────────────────────────────
+
+export async function POST(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+  const roleError = requireEmployer(auth);
+  if (roleError) return roleError;
+  if (!auth.companyId) {
+    return apiError(ERROR_CODES.NOT_FOUND, "No company found.");
   }
 
   try {
@@ -66,45 +106,19 @@ export async function POST(request: NextRequest) {
     const input = parsed.data;
     const supabase = createServiceClient();
 
-    // Check if a program already exists for this company
-    const { data: existingProgram } = await supabase
-      .from("transition_programs")
-      .select("id")
-      .eq("company_id", auth.companyId)
-      .eq("is_active", true)
-      .single();
-
-    if (existingProgram) {
-      return apiError(
-        ERROR_CODES.CONFLICT,
-        "An active program already exists for this company"
-      );
-    }
-
-    // Create the program
     const { data: rawProgram, error: programError } = await supabase
       .from("transition_programs")
       .insert({
         company_id: auth.companyId,
         name: input.name,
-        tier: input.tier,
-        total_seats: input.total_seats,
-        access_duration_days: input.access_duration_days,
-        is_branded: input.is_branded,
         custom_intro_message: input.custom_intro_message || null,
-        interview_coaching_enabled: input.interview_coaching_enabled,
-        outreach_builder_enabled: input.outreach_builder_enabled,
+        is_branded: input.is_branded,
       })
-      .select(
-        "id, company_id, name, tier, total_seats, used_seats, access_duration_days, is_branded, custom_intro_message, interview_coaching_enabled, outreach_builder_enabled, is_active, created_at"
-      )
+      .select("id, company_id, name, custom_intro_message, is_branded, is_active, created_at")
       .single();
 
     if (programError || !rawProgram) {
-      return apiError(
-        ERROR_CODES.INTERNAL_ERROR,
-        "Failed to create transition program"
-      );
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to create program");
     }
 
     const program = rawProgram as unknown as ProgramRecord;
@@ -114,45 +128,35 @@ export async function POST(request: NextRequest) {
         id: program.id,
         company_id: program.company_id,
         name: program.name,
-        tier: program.tier,
-        total_seats: program.total_seats,
-        used_seats: program.used_seats,
-        access_duration_days: program.access_duration_days,
-        is_branded: program.is_branded,
         custom_intro_message: program.custom_intro_message,
-        interview_coaching_enabled: program.interview_coaching_enabled,
-        outreach_builder_enabled: program.outreach_builder_enabled,
+        is_branded: program.is_branded,
         is_active: program.is_active,
         created_at: program.created_at,
       },
     });
   } catch {
-    return apiError(
-      ERROR_CODES.INTERNAL_ERROR,
-      "Failed to create transition program"
-    );
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to create program");
   }
 }
 
-// ─── PUT Handler (Update) ────────────────────────────────────────────
+// ─── PUT: Update a program ──────────────────────────────────────────
+
+const updateSchema = programSchema.extend({
+  id: z.string().uuid("Invalid program ID"),
+});
 
 export async function PUT(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if (isAuthError(auth)) return auth;
-
   const roleError = requireEmployer(auth);
   if (roleError) return roleError;
-
   if (!auth.companyId) {
-    return apiError(
-      ERROR_CODES.NOT_FOUND,
-      "No company found. Please complete company setup first."
-    );
+    return apiError(ERROR_CODES.NOT_FOUND, "No company found.");
   }
 
   try {
     const body = await request.json();
-    const parsed = programSchema.safeParse(body);
+    const parsed = updateSchema.safeParse(body);
 
     if (!parsed.success) {
       return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid program data", {
@@ -167,27 +171,17 @@ export async function PUT(request: NextRequest) {
       .from("transition_programs")
       .update({
         name: input.name,
-        tier: input.tier,
-        total_seats: input.total_seats,
-        access_duration_days: input.access_duration_days,
-        is_branded: input.is_branded,
         custom_intro_message: input.custom_intro_message || null,
-        interview_coaching_enabled: input.interview_coaching_enabled,
-        outreach_builder_enabled: input.outreach_builder_enabled,
+        is_branded: input.is_branded,
         updated_at: new Date().toISOString(),
       })
+      .eq("id", input.id)
       .eq("company_id", auth.companyId)
-      .eq("is_active", true)
-      .select(
-        "id, company_id, name, tier, total_seats, used_seats, access_duration_days, is_branded, custom_intro_message, interview_coaching_enabled, outreach_builder_enabled, is_active, created_at"
-      )
+      .select("id, company_id, name, custom_intro_message, is_branded, is_active, created_at")
       .single();
 
     if (programError || !rawProgram) {
-      return apiError(
-        ERROR_CODES.NOT_FOUND,
-        "No active program found to update"
-      );
+      return apiError(ERROR_CODES.NOT_FOUND, "Program not found");
     }
 
     const program = rawProgram as unknown as ProgramRecord;
@@ -197,22 +191,13 @@ export async function PUT(request: NextRequest) {
         id: program.id,
         company_id: program.company_id,
         name: program.name,
-        tier: program.tier,
-        total_seats: program.total_seats,
-        used_seats: program.used_seats,
-        access_duration_days: program.access_duration_days,
-        is_branded: program.is_branded,
         custom_intro_message: program.custom_intro_message,
-        interview_coaching_enabled: program.interview_coaching_enabled,
-        outreach_builder_enabled: program.outreach_builder_enabled,
+        is_branded: program.is_branded,
         is_active: program.is_active,
         created_at: program.created_at,
       },
     });
   } catch {
-    return apiError(
-      ERROR_CODES.INTERNAL_ERROR,
-      "Failed to update transition program"
-    );
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to update program");
   }
 }
