@@ -33,7 +33,7 @@ export async function assemblePathContext(
   employee: EmployeeProfile,
   snapshotId: string
 ): Promise<SnapshotContext> {
-  const [workHistoryResult, skillsResult, achievementsResult, industriesResult, toolsResult] =
+  const [workHistoryResult, skillsResult, achievementsResult, industriesResult, toolsResult, educationResult] =
     await Promise.all([
       supabase
         .from("work_history")
@@ -56,6 +56,10 @@ export async function assemblePathContext(
         .from("tools_technologies")
         .select("name, category, confidence")
         .eq("snapshot_id", snapshotId),
+      supabase
+        .from("education")
+        .select("institution, degree, field, graduation_year")
+        .eq("snapshot_id", snapshotId),
     ]);
 
   const careerSnapshotJson = JSON.stringify({
@@ -64,6 +68,7 @@ export async function assemblePathContext(
     achievements: achievementsResult.data ?? [],
     industries: industriesResult.data ?? [],
     tools: toolsResult.data ?? [],
+    education: educationResult.data ?? [],
   });
 
   const variables: Record<string, string> = {

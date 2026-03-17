@@ -64,6 +64,14 @@ interface ToolItem {
   confidence: number;
 }
 
+interface EducationItem {
+  id: string;
+  institution: string;
+  degree: string | null;
+  field: string | null;
+  graduation_year: number | null;
+}
+
 interface SnapshotData {
   snapshot_id: string;
   career_narrative: string;
@@ -72,6 +80,7 @@ interface SnapshotData {
   achievements: AchievementItem[];
   industries: IndustryItem[];
   tools: ToolItem[];
+  education: EducationItem[];
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -990,6 +999,37 @@ function SnapshotContent() {
                 </div>
               </section>
             </div>
+
+            {/* Education */}
+            {snapshot.education && snapshot.education.length > 0 && (
+              <section className="rounded-md border border-border bg-surface p-4 shadow-sm">
+                <h2 className="text-h3 text-text-primary mb-3">Education</h2>
+                <div className="space-y-3">
+                  {snapshot.education.map((edu) => (
+                    <div
+                      key={edu.id}
+                      className="flex items-baseline justify-between rounded-md border border-border-light bg-white p-3"
+                    >
+                      <div>
+                        <p className="text-body font-semibold text-text-primary">
+                          {edu.degree && edu.field
+                            ? `${edu.degree} in ${edu.field}`
+                            : edu.degree ?? edu.field ?? "Degree"}
+                        </p>
+                        <p className="text-body-sm text-muted">
+                          {edu.institution}
+                        </p>
+                      </div>
+                      {edu.graduation_year && (
+                        <p className="text-body-sm text-muted">
+                          {edu.graduation_year}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Inline error */}
             {error && (

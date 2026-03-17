@@ -32,6 +32,7 @@ async function fetchSnapshotData(supabase: SupabaseClient, snapshotId: string) {
     achievementsResult,
     industriesResult,
     toolsResult,
+    educationResult,
   ] = await Promise.all([
     supabase
       .from("career_snapshots")
@@ -61,6 +62,10 @@ async function fetchSnapshotData(supabase: SupabaseClient, snapshotId: string) {
       .from("tools_technologies")
       .select("id, name, category, confidence")
       .eq("snapshot_id", snapshotId),
+    supabase
+      .from("education")
+      .select("id, institution, degree, field, graduation_year")
+      .eq("snapshot_id", snapshotId),
   ]);
 
   return {
@@ -71,6 +76,7 @@ async function fetchSnapshotData(supabase: SupabaseClient, snapshotId: string) {
     achievements: achievementsResult.data ?? [],
     industries: industriesResult.data ?? [],
     tools: toolsResult.data ?? [],
+    education: educationResult.data ?? [],
   };
 }
 

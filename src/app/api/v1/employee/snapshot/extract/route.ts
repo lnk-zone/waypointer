@@ -349,6 +349,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Insert education rows
+    const educationRows = (structural.education ?? []).map((edu) => ({
+      snapshot_id: snapshotId,
+      institution: edu.institution,
+      degree: edu.degree,
+      field: edu.field,
+      graduation_year: edu.graduation_year,
+    }));
+
+    if (educationRows.length > 0) {
+      const { error: eduError } = await supabase
+        .from("education")
+        .insert(educationRows);
+      if (eduError) {
+        logDbError("insert_education", eduError);
+        await cleanupSnapshot();
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save education");
+      }
+    }
+
     // Insert industries rows
     const industryRows = semantic.industries.map((ind) => ({
       snapshot_id: snapshotId,
@@ -414,7 +434,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch inserted rows with IDs for response
-    const [workHistoryResult, skillsResult, achievementsResult, industriesResult, toolsResult] =
+    const [workHistoryResult, skillsResult, achievementsResult, industriesResult, toolsResult, educationResult] =
       await Promise.all([
         supabase
           .from("work_history")
@@ -437,6 +457,10 @@ export async function POST(request: NextRequest) {
           .from("tools_technologies")
           .select("id, name, category, confidence")
           .eq("snapshot_id", snapshotId),
+        supabase
+          .from("education")
+          .select("id, institution, degree, field, graduation_year")
+          .eq("snapshot_id", snapshotId),
       ]);
 
     process.stdout.write(JSON.stringify({ type: "extraction_complete", snapshot_id: snapshotId, timestamp: new Date().toISOString() }) + "\n");
@@ -449,6 +473,7 @@ export async function POST(request: NextRequest) {
       achievements: achievementsResult.data ?? [],
       industries: industriesResult.data ?? [],
       tools: toolsResult.data ?? [],
+      education: educationResult.data ?? [],
     });
   } catch (uncaughtError) {
     const logEntry = {
