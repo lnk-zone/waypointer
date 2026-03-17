@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle,
-  BarChart3,
   CheckCircle2,
   ClipboardList,
   FileText,
@@ -27,17 +26,31 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
+
+const ActivationsChart = dynamic(
+  () =>
+    import("@/components/charts/employer-dashboard-charts").then(
+      (m) => m.ActivationsChart
+    ),
+  { ssr: false, loading: () => <DashboardChartSkeleton /> }
+);
+const EngagementChart = dynamic(
+  () =>
+    import("@/components/charts/employer-dashboard-charts").then(
+      (m) => m.EngagementChart
+    ),
+  { ssr: false, loading: () => <DashboardChartSkeleton /> }
+);
+
+function DashboardChartSkeleton() {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="h-4 w-40 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] mb-4" />
+      <div className="h-[200px] animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+    </div>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -357,101 +370,10 @@ function DashboardContent() {
         />
       </div>
 
-      {/* Charts Row */}
+      {/* Charts Row (lazy-loaded) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Activations Over Time */}
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-4 flex items-center gap-1.5">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            Activations Over Time
-          </h3>
-          {data.activations_by_day.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={data.activations_by_day}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: "#6B7280" }}
-                  tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })
-                  }
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "#6B7280" }}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  labelFormatter={(label) =>
-                    new Date(label).toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  }
-                  formatter={(value) => [String(value), "Activations"]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  stroke="#2563EB"
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: "#2563EB" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-sm text-text-secondary">
-              No activation data yet
-            </div>
-          )}
-        </div>
-
-        {/* Engagement by Module */}
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-4 flex items-center gap-1.5">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            Engagement by Module
-          </h3>
-          {data.engagement_by_module.some((m) => m.usage_count > 0) ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart
-                data={data.engagement_by_module}
-                layout="vertical"
-                margin={{ left: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 10, fill: "#6B7280" }}
-                  allowDecimals={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="module"
-                  tick={{ fontSize: 10, fill: "#6B7280" }}
-                  tickFormatter={(value) =>
-                    value.charAt(0).toUpperCase() + value.slice(1)
-                  }
-                />
-                <Tooltip
-                  formatter={(value) => [String(value), "Actions"]}
-                />
-                <Bar
-                  dataKey="usage_count"
-                  fill="#2563EB"
-                  radius={[0, 4, 4, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-sm text-text-secondary">
-              No engagement data yet
-            </div>
-          )}
-        </div>
+        <ActivationsChart data={data.activations_by_day} />
+        <EngagementChart data={data.engagement_by_module} />
       </div>
 
       {/* Bottom Row */}

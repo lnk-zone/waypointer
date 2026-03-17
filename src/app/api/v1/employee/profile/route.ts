@@ -9,6 +9,8 @@ import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { profileSchema } from "@/lib/validators/profile";
 import { z } from "zod";
 
+export const runtime = "edge";
+
 const profilePatchSchema = z.object({
   seniority: z.enum([
     "entry_level", "mid_level", "senior", "staff_principal",

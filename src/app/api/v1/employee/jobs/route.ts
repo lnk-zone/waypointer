@@ -16,6 +16,8 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
+export const runtime = "edge";
+
 const JOB_LISTING_SELECT = `
   id,
   external_id,

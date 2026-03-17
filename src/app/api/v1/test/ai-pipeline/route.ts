@@ -4,6 +4,8 @@ import { executeAIPipeline, AIError } from "@/lib/ai/pipeline";
 import { extractStructuralSchema } from "@/lib/validators/ai";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
+export const runtime = "edge";
+
 const requestSchema = z.object({
   resume_text: z.string().min(1, "Resume text is required"),
 });

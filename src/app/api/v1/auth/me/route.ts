@@ -4,6 +4,8 @@ import {
   isAuthError,
 } from "@/lib/api/auth-middleware";
 
+export const runtime = "edge";
+
 /**
  * GET /api/v1/auth/me
  * Returns the current user's profile and role.

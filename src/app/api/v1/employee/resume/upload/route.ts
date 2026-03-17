@@ -7,6 +7,8 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
+export const runtime = "nodejs";
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
   "application/pdf",

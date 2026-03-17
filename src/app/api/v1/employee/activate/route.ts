@@ -4,6 +4,8 @@ import { activateEmployeeSchema } from "@/lib/validators/auth";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import * as jose from "jose";
 
+export const runtime = "edge";
+
 /**
  * POST /api/v1/employee/activate
  * Activates an employee seat — creates auth user and employee profile.

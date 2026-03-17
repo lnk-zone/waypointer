@@ -3,6 +3,8 @@ import { createAnonClient, createServiceClient } from "@/lib/supabase/server";
 import { signupSchema } from "@/lib/validators/auth";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
+export const runtime = "edge";
+
 /**
  * POST /api/v1/auth/signup
  * Register a new employer admin with company.

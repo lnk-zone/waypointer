@@ -16,6 +16,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { z } from "zod";
 
+export const runtime = "edge";
+
 const trackSchema = z.object({
   status: z.enum(["saved", "applied", "interviewing", "offer", "closed"]),
 });

@@ -17,6 +17,8 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
+export const runtime = "edge";
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 interface OutreachRecord {

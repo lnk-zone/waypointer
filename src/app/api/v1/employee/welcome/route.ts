@@ -7,6 +7,8 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
+export const runtime = "edge";
+
 /**
  * GET /api/v1/employee/welcome
  * Returns welcome screen data: company branding, welcome message, and program info.
