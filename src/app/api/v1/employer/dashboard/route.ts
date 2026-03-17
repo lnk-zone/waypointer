@@ -20,12 +20,6 @@ import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
-interface ProgramRecord {
-  id: string;
-  total_seats: number;
-  used_seats: number;
-}
-
 interface SeatRecord {
   id: string;
   status: string;
@@ -138,30 +132,20 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createServiceClient();
 
-    // Get active program
-    const { data: rawProgram } = await supabase
-      .from("transition_programs")
-      .select("id, total_seats, used_seats")
-      .eq("company_id", auth.companyId)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
+    // Get account-level seat balance
+    const { data: companyData } = await supabase
+      .from("companies")
+      .select("total_seats_purchased, total_seats_assigned")
+      .eq("id", auth.companyId)
       .single();
 
-    if (!rawProgram) {
-      return apiError(
-        ERROR_CODES.NOT_FOUND,
-        "No active transition program found"
-      );
-    }
+    const seatBalance = companyData as { total_seats_purchased: number; total_seats_assigned: number } | null;
 
-    const program = rawProgram as unknown as ProgramRecord;
-
-    // Step 1: Get all seats for this program
+    // Get all seats for this company
     const { data: rawSeats } = await supabase
       .from("seats")
       .select("id, status, activated_at")
-      .eq("program_id", program.id);
+      .eq("company_id", auth.companyId);
 
     const seats = (rawSeats as unknown as SeatRecord[] | null) ?? [];
     const activeSeatIds = seats
@@ -295,7 +279,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: {
-        seats_purchased: program.total_seats,
+        seats_purchased: seatBalance?.total_seats_purchased ?? 0,
+        seats_assigned: seatBalance?.total_seats_assigned ?? 0,
+        seats_available: (seatBalance?.total_seats_purchased ?? 0) - (seatBalance?.total_seats_assigned ?? 0),
         seats_activated: seatsActivated,
         onboarding_completion_rate: Math.round(onboardingRate * 1000) / 1000,
         resume_completion_rate: Math.round(resumeRate * 1000) / 1000,
