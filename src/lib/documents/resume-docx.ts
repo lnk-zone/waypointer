@@ -1,26 +1,34 @@
 /**
- * DOCX resume builder using the `docx` npm package.
- * Uses standard Word styles for ATS compatibility per MP §10.
- * No tables, no text boxes, no headers/footers for content.
+ * Professional DOCX resume builder using the `docx` npm package.
+ * Clean, modern design with blue accent color, proper typography hierarchy,
+ * and ATS-friendly structure. US Letter, 0.6" margins.
  */
 
 import {
   Document,
   Paragraph,
   TextRun,
-  HeadingLevel,
   AlignmentType,
   Packer,
   convertInchesToTwip,
   TabStopPosition,
   TabStopType,
+  BorderStyle,
+  ShadingType,
 } from "docx";
-
-// ─── Types ───────────────────────────────────────────────────────────
 
 import type { ResumeDocumentProps } from "@/types/resume";
 
 export type ResumeDocxProps = ResumeDocumentProps;
+
+// ─── Colors ──────────────────────────────────────────────────────────
+
+const BLUE = "2563EB";       // Waypointer Blue
+const TEXT = "111827";         // Gray-900
+const TEXT_SECONDARY = "4B5563"; // Gray-600
+const TEXT_MUTED = "6B7280";   // Gray-500
+const SKILL_BG = "F3F4F6";    // Gray-100
+const BORDER = "D1D5DB";      // Gray-300
 
 // ─── Builder ─────────────────────────────────────────────────────────
 
@@ -39,72 +47,111 @@ export async function buildResumeDocx(
 
   const children: Paragraph[] = [];
 
-  // Name (Heading 1, centered)
+  // ── Name (large, bold, dark) ──
   children.push(
     new Paragraph({
-      text: employeeName,
-      heading: HeadingLevel.HEADING_1,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
+      spacing: { after: 60 },
+      children: [
+        new TextRun({
+          text: employeeName,
+          bold: true,
+          size: 44, // 22pt
+          color: TEXT,
+          font: "Inter",
+        }),
+      ],
     })
   );
 
-  // Contact info
+  // ── Contact info ──
   if (contactInfo) {
     children.push(
       new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 200 },
+        spacing: { after: 160 },
         children: [
           new TextRun({
             text: contactInfo,
-            size: 20, // 10pt
-            color: "6B7280",
+            size: 18, // 9pt
+            color: TEXT_MUTED,
+            font: "Inter",
           }),
         ],
       })
     );
   }
 
-  // Summary section
-  children.push(sectionHeader("SUMMARY"));
+  // ── Blue divider line ──
+  children.push(blueRule());
+
+  // ── Summary ──
+  children.push(sectionHeader("PROFESSIONAL SUMMARY"));
   children.push(
     new Paragraph({
       spacing: { after: 200 },
       children: [
         new TextRun({
           text: summaryStatement,
-          size: 20,
+          size: 19, // 9.5pt
+          color: TEXT_SECONDARY,
+          font: "Inter",
         }),
       ],
     })
   );
 
-  // Key Skills section
+  // ── Core Competencies (skills as inline tags) ──
   if (skillsSection.length > 0) {
-    children.push(sectionHeader("KEY SKILLS"));
+    children.push(sectionHeader("CORE COMPETENCIES"));
+
+    // Create skills as a formatted paragraph with pipe separators
+    const skillRuns: TextRun[] = [];
+    skillsSection.forEach((skill, i) => {
+      skillRuns.push(
+        new TextRun({
+          text: skill,
+          bold: true,
+          size: 18,
+          color: TEXT_SECONDARY,
+          font: "Inter",
+          shading: {
+            type: ShadingType.CLEAR,
+            color: "auto",
+            fill: SKILL_BG,
+          },
+        })
+      );
+      if (i < skillsSection.length - 1) {
+        skillRuns.push(
+          new TextRun({
+            text: "  \u00B7  ", // middle dot separator
+            size: 18,
+            color: BORDER,
+            font: "Inter",
+          })
+        );
+      }
+    });
+
     children.push(
       new Paragraph({
-        spacing: { after: 200 },
-        children: [
-          new TextRun({
-            text: skillsSection.join(", "),
-            size: 20,
-          }),
-        ],
+        spacing: { after: 240 },
+        children: skillRuns,
       })
     );
   }
 
-  // Experience section
+  // ── Thin divider ──
+  children.push(thinRule());
+
+  // ── Experience ──
   if (experienceSection.length > 0) {
-    children.push(sectionHeader("EXPERIENCE"));
+    children.push(sectionHeader("PROFESSIONAL EXPERIENCE"));
 
     for (const exp of experienceSection) {
-      // Company — Title with dates on right
+      // Company name (bold, dark)
       children.push(
         new Paragraph({
-          spacing: { before: 100, after: 50 },
+          spacing: { before: 120, after: 20 },
           tabStops: [
             {
               type: TabStopType.RIGHT,
@@ -113,14 +160,33 @@ export async function buildResumeDocx(
           ],
           children: [
             new TextRun({
-              text: `${exp.company} — ${exp.title}`,
+              text: exp.company,
               bold: true,
-              size: 20,
+              size: 21, // 10.5pt
+              color: TEXT,
+              font: "Inter",
             }),
             new TextRun({
               text: `\t${exp.dates}`,
-              size: 18,
-              color: "6B7280",
+              size: 17,
+              color: TEXT_MUTED,
+              font: "Inter",
+            }),
+          ],
+        })
+      );
+
+      // Title (blue, semibold)
+      children.push(
+        new Paragraph({
+          spacing: { after: 60 },
+          children: [
+            new TextRun({
+              text: exp.title,
+              bold: true,
+              size: 19,
+              color: BLUE,
+              font: "Inter",
             }),
           ],
         })
@@ -131,11 +197,13 @@ export async function buildResumeDocx(
         children.push(
           new Paragraph({
             bullet: { level: 0 },
-            spacing: { after: 60 },
+            spacing: { after: 50 },
             children: [
               new TextRun({
                 text: bullet,
-                size: 20,
+                size: 19,
+                color: TEXT_SECONDARY,
+                font: "Inter",
               }),
             ],
           })
@@ -144,7 +212,7 @@ export async function buildResumeDocx(
     }
   }
 
-  // Education section
+  // ── Education ──
   if (educationSection && educationSection.length > 0) {
     children.push(sectionHeader("EDUCATION"));
 
@@ -156,39 +224,65 @@ export async function buildResumeDocx(
 
       children.push(
         new Paragraph({
-          spacing: { after: 60 },
+          spacing: { after: 40 },
+          tabStops: [
+            {
+              type: TabStopType.RIGHT,
+              position: TabStopPosition.MAX,
+            },
+          ],
           children: [
             new TextRun({
-              text: `${degreeText} — ${edu.institution}`,
-              size: 20,
+              text: degreeText,
+              bold: true,
+              size: 19,
+              color: TEXT,
+              font: "Inter",
             }),
             ...(edu.year
               ? [
                   new TextRun({
-                    text: `, ${edu.year}`,
-                    size: 20,
-                    color: "6B7280",
+                    text: `\t${edu.year}`,
+                    size: 17,
+                    color: TEXT_MUTED,
+                    font: "Inter",
                   }),
                 ]
               : []),
           ],
         })
       );
+
+      children.push(
+        new Paragraph({
+          spacing: { after: 80 },
+          children: [
+            new TextRun({
+              text: edu.institution,
+              size: 18,
+              color: TEXT_SECONDARY,
+              font: "Inter",
+            }),
+          ],
+        })
+      );
     }
   }
 
-  // Certifications section
+  // ── Certifications ──
   if (certificationsSection && certificationsSection.length > 0) {
     children.push(sectionHeader("CERTIFICATIONS"));
 
     for (const cert of certificationsSection) {
       children.push(
         new Paragraph({
-          spacing: { after: 60 },
+          spacing: { after: 50 },
           children: [
             new TextRun({
               text: cert,
-              size: 20,
+              size: 19,
+              color: TEXT_SECONDARY,
+              font: "Inter",
             }),
           ],
         })
@@ -202,10 +296,38 @@ export async function buildResumeDocx(
         document: {
           run: {
             font: "Inter",
-            size: 20, // 10pt in half-points
+            size: 19,
+            color: TEXT,
           },
         },
       },
+    },
+    numbering: {
+      config: [
+        {
+          reference: "default-bullet",
+          levels: [
+            {
+              level: 0,
+              format: "bullet",
+              text: "\u2022",
+              alignment: AlignmentType.LEFT,
+              style: {
+                paragraph: {
+                  indent: {
+                    left: convertInchesToTwip(0.25),
+                    hanging: convertInchesToTwip(0.15),
+                  },
+                },
+                run: {
+                  color: BLUE,
+                  font: "Inter",
+                },
+              },
+            },
+          ],
+        },
+      ],
     },
     sections: [
       {
@@ -216,10 +338,10 @@ export async function buildResumeDocx(
               height: convertInchesToTwip(11),
             },
             margin: {
-              top: convertInchesToTwip(0.75),
-              bottom: convertInchesToTwip(0.75),
-              left: convertInchesToTwip(0.75),
-              right: convertInchesToTwip(0.75),
+              top: convertInchesToTwip(0.6),
+              bottom: convertInchesToTwip(0.6),
+              left: convertInchesToTwip(0.6),
+              right: convertInchesToTwip(0.6),
             },
           },
         },
@@ -236,14 +358,51 @@ export async function buildResumeDocx(
 
 function sectionHeader(text: string): Paragraph {
   return new Paragraph({
-    heading: HeadingLevel.HEADING_2,
     spacing: { before: 200, after: 100 },
     children: [
       new TextRun({
+        text: "\u258C ", // left block character for visual accent
+        size: 22,
+        color: BLUE,
+        font: "Inter",
+      }),
+      new TextRun({
         text,
         bold: true,
-        size: 24, // 12pt
+        size: 22, // 11pt
+        color: BLUE,
+        font: "Inter",
       }),
     ],
+  });
+}
+
+function blueRule(): Paragraph {
+  return new Paragraph({
+    spacing: { after: 160 },
+    border: {
+      bottom: {
+        color: BLUE,
+        space: 1,
+        style: BorderStyle.SINGLE,
+        size: 12, // 1.5pt
+      },
+    },
+    children: [],
+  });
+}
+
+function thinRule(): Paragraph {
+  return new Paragraph({
+    spacing: { before: 80, after: 160 },
+    border: {
+      bottom: {
+        color: "E5E7EB",
+        space: 1,
+        style: BorderStyle.SINGLE,
+        size: 4,
+      },
+    },
+    children: [],
   });
 }

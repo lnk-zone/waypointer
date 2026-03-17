@@ -240,12 +240,11 @@ function ResumeWorkspace() {
           );
         }
 
-        // Generate resumes for all selected paths
-        const generated: ResumeData[] = [];
-        for (const path of selectedPaths) {
-          try {
+        // Generate resumes for all selected paths in parallel
+        const results = await Promise.allSettled(
+          selectedPaths.map(async (path: { id: string; title: string; is_primary: boolean }) => {
             const result = await generateResume(path.id);
-            generated.push({
+            return {
               resume_id: result.resume_id,
               role_path_id: result.role_path_id,
               role_path_title: path.title,
@@ -264,11 +263,12 @@ function ResumeWorkspace() {
                 feedback: null,
               },
               created_at: new Date().toISOString(),
-            });
-          } catch {
-            // Continue generating remaining paths even if one fails
-          }
-        }
+            } as ResumeData;
+          })
+        );
+        const generated = results
+          .filter((r): r is PromiseFulfilledResult<ResumeData> => r.status === "fulfilled")
+          .map((r) => r.value);
 
         if (generated.length === 0) {
           throw new Error("Failed to generate resumes. Please try again.");
