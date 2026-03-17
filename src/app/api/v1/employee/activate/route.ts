@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
 
     // Decode the seat token (JWT signed with service role secret)
-    let tokenPayload: { seat_id: string; email: string; program_id: string };
+    let tokenPayload: { seat_id: string; email: string; program_id?: string };
     try {
       const secret = new TextEncoder().encode(
         process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -71,29 +71,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Optimistic pre-check for seats available (RPC is the authoritative guard)
-    const { data: programCheck } = await supabase
-      .from("transition_programs")
-      .select("id, access_duration_days, company_id, name, total_seats, used_seats")
-      .eq("id", seat.program_id)
+    // Get company info from the seat's company_id
+    const { data: seatWithCompany } = await supabase
+      .from("seats")
+      .select("company_id")
+      .eq("id", seat.id)
       .single();
 
-    if (!programCheck) {
-      return apiError(ERROR_CODES.NOT_FOUND, "Program not found");
+    if (!seatWithCompany) {
+      return apiError(ERROR_CODES.NOT_FOUND, "Seat company not found");
     }
 
-    if (programCheck.used_seats >= programCheck.total_seats) {
-      return apiError(ERROR_CODES.SEATS_EXHAUSTED, "No remaining seats available in this program");
-    }
+    const companyId = (seatWithCompany as unknown as { company_id: string }).company_id;
 
-    const program = programCheck;
-
-    // Get company name
     const { data: company } = await supabase
       .from("companies")
       .select("name")
-      .eq("id", program.company_id)
+      .eq("id", companyId)
       .single();
+
+    // Get program name if program_id exists
+    let programName = "Career Transition";
+    if (seat.program_id) {
+      const { data: prog } = await supabase
+        .from("transition_programs")
+        .select("name")
+        .eq("id", seat.program_id)
+        .single();
+      if (prog) programName = (prog as unknown as { name: string }).name;
+    }
 
     // Create Supabase Auth user
     let authUserId: string;
@@ -145,8 +151,10 @@ export async function POST(request: NextRequest) {
     };
 
     const now = new Date();
+    // 90 days access from activation
+    const ACCESS_DURATION_DAYS = 90;
     const expiresAt = new Date(
-      now.getTime() + program.access_duration_days * 24 * 60 * 60 * 1000
+      now.getTime() + ACCESS_DURATION_DAYS * 24 * 60 * 60 * 1000
     );
 
     // Update seat status
@@ -162,16 +170,6 @@ export async function POST(request: NextRequest) {
     if (seatUpdateError) {
       await rollbackAuthUser();
       return apiError(ERROR_CODES.VALIDATION_ERROR, "Failed to activate seat");
-    }
-
-    // Atomically increment used_seats count on the program
-    const { error: rpcError } = await supabase.rpc("increment_used_seats", {
-      p_program_id: program.id,
-    });
-
-    if (rpcError) {
-      await rollbackAuthUser();
-      return apiError(ERROR_CODES.VALIDATION_ERROR, "Failed to update program seat count");
     }
 
     // Create employee profile
@@ -215,7 +213,7 @@ export async function POST(request: NextRequest) {
       {
         employee_id: employeeProfile.id,
         seat_id: seat.id,
-        program_name: program.name,
+        program_name: programName,
         company_name: company?.name ?? "",
         access_expires_at: expiresAt.toISOString(),
         auth_token: authToken,
