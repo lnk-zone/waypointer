@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create seat records
+      // Create seat records (return IDs for email sending)
       const seatRecords = newEmployees.map((emp) => ({
         company_id: auth.companyId,
         program_id: program_id || null,
@@ -200,11 +200,12 @@ export async function POST(request: NextRequest) {
         status: "invited" as const,
       }));
 
-      const { error: insertError } = await supabase
+      const { data: insertedSeats, error: insertError } = await supabase
         .from("seats")
-        .insert(seatRecords);
+        .insert(seatRecords)
+        .select("id");
 
-      if (insertError) {
+      if (insertError || !insertedSeats) {
         // Rollback: decrement assigned seats
         Promise.resolve(
           supabase.rpc("assign_seats", {
@@ -216,6 +217,31 @@ export async function POST(request: NextRequest) {
       }
 
       invited = newEmployees.length;
+
+      // Fire off invitation emails via internal API (non-blocking)
+      const seatIds = (insertedSeats as unknown as Array<{ id: string }>).map((s) => s.id);
+      if (seatIds.length > 0) {
+        const origin = request.headers.get("origin") || request.nextUrl.origin;
+        // Forward the auth cookie so the email endpoint can authenticate
+        const cookieHeader = request.headers.get("cookie") || "";
+        const authHeader = request.headers.get("authorization") || "";
+
+        // Fire and don't block the response — emails send in background
+        fetch(`${origin}/api/v1/email/send`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(cookieHeader && { Cookie: cookieHeader }),
+            ...(authHeader && { Authorization: authHeader }),
+          },
+          body: JSON.stringify({
+            seat_ids: seatIds,
+            template_type: "invitation",
+          }),
+        }).catch(() => {
+          // Email sending failure is non-fatal — seats are created
+        });
+      }
     }
 
     return NextResponse.json({

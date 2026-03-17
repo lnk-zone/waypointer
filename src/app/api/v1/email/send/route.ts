@@ -46,7 +46,8 @@ interface SeatRecord {
   employee_name: string | null;
   employee_email: string;
   status: string;
-  program_id: string;
+  program_id: string | null;
+  company_id: string;
 }
 
 interface CompanyRecord {
@@ -70,7 +71,7 @@ function getBaseUrl(): string {
 async function generateSeatToken(
   seatId: string,
   email: string,
-  programId: string
+  programId: string | null
 ): Promise<string> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) {
@@ -80,7 +81,7 @@ async function generateSeatToken(
   const token = await new jose.SignJWT({
     seat_id: seatId,
     email,
-    program_id: programId,
+    ...(programId && { program_id: programId }),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("30d")
@@ -125,14 +126,12 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = createServiceClient();
 
-    // Verify seats belong to employer's programs
+    // Verify seats belong to this company (account-level ownership)
     const { data: rawSeats } = await supabase
       .from("seats")
-      .select(
-        "id, employee_name, employee_email, status, program_id, transition_programs!inner(company_id)"
-      )
+      .select("id, employee_name, employee_email, status, program_id, company_id")
       .in("id", seat_ids)
-      .eq("transition_programs.company_id", auth.companyId);
+      .eq("company_id", auth.companyId);
 
     const seats = (rawSeats as unknown as SeatRecord[] | null) ?? [];
 
