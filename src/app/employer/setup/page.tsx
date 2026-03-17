@@ -31,7 +31,6 @@ interface FormState {
   brand_color: string;
   support_email: string;
   welcome_message: string;
-  default_program_duration_days: number;
   admin_emails: string[];
 }
 
@@ -90,7 +89,6 @@ function SetupForm() {
     brand_color: "#2563EB",
     support_email: "",
     welcome_message: "",
-    default_program_duration_days: 90,
     admin_emails: [""],
   });
 
@@ -206,7 +204,6 @@ function SetupForm() {
             brand_color: form.brand_color,
             support_email: form.support_email.trim(),
             welcome_message: form.welcome_message.trim(),
-            default_program_duration_days: form.default_program_duration_days,
             admin_emails: form.admin_emails
               .map((e) => e.trim())
               .filter((e) => e !== ""),
@@ -229,8 +226,8 @@ function SetupForm() {
           );
         }
 
-        // Navigate to program settings
-        router.push("/employer/program");
+        // Navigate to seat purchase
+        router.push("/employer/purchase");
       } catch (err) {
         setSubmitError(
           err instanceof Error ? err.message : "Failed to create company"
@@ -400,28 +397,6 @@ function SetupForm() {
             {form.welcome_message.length > 0 && (
               <> · {form.welcome_message.length}/2000</>
             )}
-          </p>
-        </div>
-
-        {/* Default Program Duration */}
-        <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">
-            Default Program Duration (days)
-          </label>
-          <Input
-            type="number"
-            value={form.default_program_duration_days}
-            onChange={(e) =>
-              updateField(
-                "default_program_duration_days",
-                Math.max(7, Math.min(365, parseInt(e.target.value) || 90))
-              )
-            }
-            min={7}
-            max={365}
-          />
-          <p className="text-[10px] text-text-secondary mt-1">
-            How long employees have access (7–365 days)
           </p>
         </div>
 
