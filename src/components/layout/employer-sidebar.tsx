@@ -7,15 +7,15 @@ import { WaypointerLogo } from "@/components/brand/logo";
 import {
   BarChart3,
   CreditCard,
+  FolderOpen,
   LayoutDashboard,
-  Settings,
   Users,
 } from "lucide-react";
 
 const EMPLOYER_NAV_ITEMS = [
   { label: "Overview", href: "/employer/dashboard", Icon: LayoutDashboard },
-  { label: "Employees", href: "/employer/invite", Icon: Users },
-  { label: "Program", href: "/employer/program", Icon: Settings },
+  { label: "Invitations", href: "/employer/invite", Icon: Users },
+  { label: "Programs", href: "/employer/programs", Icon: FolderOpen },
   { label: "Reporting", href: "/employer/outcomes", Icon: BarChart3 },
   { label: "Billing", href: "/employer/billing", Icon: CreditCard },
 ] as const;
