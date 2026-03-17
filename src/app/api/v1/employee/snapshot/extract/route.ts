@@ -160,6 +160,26 @@ export async function POST(request: NextRequest) {
     achievements: achievements.achievements,
   };
 
+  // Delete any existing snapshot for this employee (handles re-extraction)
+  const { error: deleteError } = await supabase
+    .from("career_snapshots")
+    .delete()
+    .eq("employee_id", employee.id);
+
+  if (deleteError) {
+    const logEntry = {
+      type: "db_error",
+      step: "delete_existing_snapshot",
+      employee_id: employee.id,
+      error: deleteError.message,
+      code: deleteError.code,
+      details: deleteError.details,
+      timestamp: new Date().toISOString(),
+    };
+    process.stdout.write(JSON.stringify(logEntry) + "\n");
+    // Non-fatal: continue to insert
+  }
+
   // Insert career_snapshots row
   const { data: snapshot, error: snapError } = await supabase
     .from("career_snapshots")
@@ -172,6 +192,17 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (snapError || !snapshot) {
+    const logEntry = {
+      type: "db_error",
+      step: "insert_career_snapshot",
+      employee_id: employee.id,
+      error: snapError?.message,
+      code: snapError?.code,
+      details: snapError?.details,
+      hint: snapError?.hint,
+      timestamp: new Date().toISOString(),
+    };
+    process.stdout.write(JSON.stringify(logEntry) + "\n");
     return apiError(
       ERROR_CODES.INTERNAL_ERROR,
       "Failed to save career snapshot"
@@ -186,187 +217,225 @@ export async function POST(request: NextRequest) {
     await supabase.from("career_snapshots").delete().eq("id", snapshotId);
   }
 
-  // Insert work_history rows
-  const workHistoryRows = structural.work_history.map((wh, index) => ({
-    snapshot_id: snapshotId,
-    company: wh.company,
-    title: wh.title,
-    start_date: wh.start_date,
-    end_date: wh.end_date,
-    duration_months: wh.duration_months,
-    description: wh.description_bullets.join("\n"),
-    is_management_role: false,
-    sort_order: index,
-  }));
-
-  if (workHistoryRows.length > 0) {
-    const { error: whError } = await supabase
-      .from("work_history")
-      .insert(workHistoryRows);
-    if (whError) {
-      await cleanupSnapshot();
-      return apiError(
-        ERROR_CODES.INTERNAL_ERROR,
-        "Failed to save work history"
-      );
-    }
-  }
-
-  // Insert skills rows (combining technical and domain)
-  const skillRows = [
-    ...structural.skills_technical.map((name) => ({
-      snapshot_id: snapshotId,
-      name,
-      category: "technical" as const,
-      confidence: 1.0,
-    })),
-    ...structural.skills_domain.map((name) => ({
-      snapshot_id: snapshotId,
-      name,
-      category: "domain" as const,
-      confidence: 1.0,
-    })),
-  ];
-
-  if (skillRows.length > 0) {
-    const { error: skillError } = await supabase
-      .from("skills")
-      .insert(skillRows);
-    if (skillError) {
-      await cleanupSnapshot();
-      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save skills");
-    }
-  }
-
-  // Insert achievements rows (only columns that exist in DB schema)
-  const achievementRows = achievements.achievements.map((a) => ({
-    snapshot_id: snapshotId,
-    statement: a.statement,
-    source_text: a.source_text,
-    impact: a.impact_type,
-    has_metric: a.has_metric,
-  }));
-
-  if (achievementRows.length > 0) {
-    const { error: achError } = await supabase
-      .from("achievements")
-      .insert(achievementRows);
-    if (achError) {
-      await cleanupSnapshot();
-      return apiError(
-        ERROR_CODES.INTERNAL_ERROR,
-        "Failed to save achievements"
-      );
-    }
-  }
-
-  // Insert industries rows
-  const industryRows = semantic.industries.map((ind) => ({
-    snapshot_id: snapshotId,
-    name: ind.name,
-    confidence: ind.confidence,
-  }));
-
-  if (industryRows.length > 0) {
-    const { error: indError } = await supabase
-      .from("industries")
-      .insert(industryRows);
-    if (indError) {
-      await cleanupSnapshot();
-      return apiError(
-        ERROR_CODES.INTERNAL_ERROR,
-        "Failed to save industries"
-      );
-    }
-  }
-
-  // Insert tools_technologies rows
-  const toolRows = structural.tools_technologies.map((tool) => ({
-    snapshot_id: snapshotId,
-    name: tool.name,
-    category: tool.category,
-    confidence: 1.0,
-  }));
-
-  if (toolRows.length > 0) {
-    const { error: toolError } = await supabase
-      .from("tools_technologies")
-      .insert(toolRows);
-    if (toolError) {
-      await cleanupSnapshot();
-      return apiError(
-        ERROR_CODES.INTERNAL_ERROR,
-        "Failed to save tools and technologies"
-      );
-    }
-  }
-
-  // Update employee profile with years_of_experience and most recent role
-  if (structural.work_history.length > 0) {
-    const mostRecent = structural.work_history[0];
-    const updatePayload: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
+  // Helper: log DB errors with full context
+  function logDbError(step: string, error: { message?: string; code?: string; details?: string; hint?: string } | null) {
+    const logEntry = {
+      type: "db_error",
+      step,
+      employee_id: employee.id,
+      error: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      timestamp: new Date().toISOString(),
     };
-    if (structural.total_years_experience !== null) {
-      updatePayload.years_of_experience = structural.total_years_experience;
-    }
-    if (mostRecent.title) {
-      updatePayload.most_recent_role = mostRecent.title;
-    }
-    if (mostRecent.company) {
-      updatePayload.most_recent_company = mostRecent.company;
-    }
-
-    const { error: profileUpdateError } = await supabase
-      .from("employee_profiles")
-      .update(updatePayload)
-      .eq("id", employee.id);
-
-    if (profileUpdateError) {
-      // Non-critical: snapshot data is saved, profile sync is best-effort
-      const logEntry = {
-        type: "profile_update_warning",
-        employee_id: employee.id,
-        error: profileUpdateError.message,
-        timestamp: new Date().toISOString(),
-      };
-      process.stdout.write(JSON.stringify(logEntry) + "\n");
-    }
+    process.stdout.write(JSON.stringify(logEntry) + "\n");
   }
 
-  // Fetch inserted rows with IDs for response
-  const [workHistoryResult, skillsResult, achievementsResult, industriesResult, toolsResult] =
-    await Promise.all([
-      supabase
-        .from("work_history")
-        .select("id, company, title, start_date, end_date, duration_months, is_management_role")
-        .eq("snapshot_id", snapshotId)
-        .order("sort_order", { ascending: true }),
-      supabase
-        .from("skills")
-        .select("id, name, category, confidence")
-        .eq("snapshot_id", snapshotId),
-      supabase
-        .from("achievements")
-        .select("id, statement, impact, has_metric, source_text")
-        .eq("snapshot_id", snapshotId),
-      supabase
-        .from("industries")
-        .select("id, name, confidence")
-        .eq("snapshot_id", snapshotId),
-      supabase
-        .from("tools_technologies")
-        .select("id, name, category, confidence")
-        .eq("snapshot_id", snapshotId),
-    ]);
+  // Helper: normalize date strings from AI output to YYYY-MM-DD or null
+  function normalizeDate(dateStr: string | null): string | null {
+    if (!dateStr) return null;
+    // Already in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    // Try YYYY-MM format
+    if (/^\d{4}-\d{2}$/.test(dateStr)) return `${dateStr}-01`;
+    // Try parsing with Date constructor
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split("T")[0];
+      }
+    } catch {
+      // fall through
+    }
+    return null;
+  }
 
-  return NextResponse.json({
-    snapshot_id: snapshotId,
-    career_narrative: semantic.career_narrative,
-    work_history: workHistoryResult.data ?? [],
-    skills: skillsResult.data ?? [],
-    achievements: achievementsResult.data ?? [],
-    industries: industriesResult.data ?? [],
-    tools: toolsResult.data ?? [],
-  });
+  // Wrap all DB persistence in try/catch to catch any uncaught errors
+  try {
+    // Insert work_history rows
+    const workHistoryRows = structural.work_history.map((wh, index) => ({
+      snapshot_id: snapshotId,
+      company: wh.company,
+      title: wh.title,
+      start_date: normalizeDate(wh.start_date),
+      end_date: normalizeDate(wh.end_date),
+      duration_months: wh.duration_months,
+      description: wh.description_bullets.join("\n"),
+      is_management_role: false,
+      sort_order: index,
+    }));
+
+    if (workHistoryRows.length > 0) {
+      const { error: whError } = await supabase
+        .from("work_history")
+        .insert(workHistoryRows);
+      if (whError) {
+        logDbError("insert_work_history", whError);
+        await cleanupSnapshot();
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save work history");
+      }
+    }
+
+    // Insert skills rows (combining technical and domain)
+    const skillRows = [
+      ...structural.skills_technical.map((name) => ({
+        snapshot_id: snapshotId,
+        name,
+        category: "technical" as const,
+        confidence: 1.0,
+      })),
+      ...structural.skills_domain.map((name) => ({
+        snapshot_id: snapshotId,
+        name,
+        category: "domain" as const,
+        confidence: 1.0,
+      })),
+    ];
+
+    if (skillRows.length > 0) {
+      const { error: skillError } = await supabase
+        .from("skills")
+        .insert(skillRows);
+      if (skillError) {
+        logDbError("insert_skills", skillError);
+        await cleanupSnapshot();
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save skills");
+      }
+    }
+
+    // Insert achievements rows
+    const achievementRows = achievements.achievements.map((a) => ({
+      snapshot_id: snapshotId,
+      statement: a.statement,
+      source_text: a.source_text,
+      impact: a.impact_type,
+      has_metric: a.has_metric,
+    }));
+
+    if (achievementRows.length > 0) {
+      const { error: achError } = await supabase
+        .from("achievements")
+        .insert(achievementRows);
+      if (achError) {
+        logDbError("insert_achievements", achError);
+        await cleanupSnapshot();
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save achievements");
+      }
+    }
+
+    // Insert industries rows
+    const industryRows = semantic.industries.map((ind) => ({
+      snapshot_id: snapshotId,
+      name: ind.name,
+      confidence: ind.confidence,
+    }));
+
+    if (industryRows.length > 0) {
+      const { error: indError } = await supabase
+        .from("industries")
+        .insert(industryRows);
+      if (indError) {
+        logDbError("insert_industries", indError);
+        await cleanupSnapshot();
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save industries");
+      }
+    }
+
+    // Insert tools_technologies rows
+    const toolRows = structural.tools_technologies.map((tool) => ({
+      snapshot_id: snapshotId,
+      name: tool.name,
+      category: tool.category,
+      confidence: 1.0,
+    }));
+
+    if (toolRows.length > 0) {
+      const { error: toolError } = await supabase
+        .from("tools_technologies")
+        .insert(toolRows);
+      if (toolError) {
+        logDbError("insert_tools_technologies", toolError);
+        await cleanupSnapshot();
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save tools and technologies");
+      }
+    }
+
+    // Update employee profile with years_of_experience and most recent role
+    if (structural.work_history.length > 0) {
+      const mostRecent = structural.work_history[0];
+      const updatePayload: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (structural.total_years_experience !== null) {
+        updatePayload.years_of_experience = structural.total_years_experience;
+      }
+      if (mostRecent.title) {
+        updatePayload.most_recent_role = mostRecent.title;
+      }
+      if (mostRecent.company) {
+        updatePayload.most_recent_company = mostRecent.company;
+      }
+
+      const { error: profileUpdateError } = await supabase
+        .from("employee_profiles")
+        .update(updatePayload)
+        .eq("id", employee.id);
+
+      if (profileUpdateError) {
+        logDbError("update_employee_profile", profileUpdateError);
+        // Non-critical: snapshot data is saved, profile sync is best-effort
+      }
+    }
+
+    // Fetch inserted rows with IDs for response
+    const [workHistoryResult, skillsResult, achievementsResult, industriesResult, toolsResult] =
+      await Promise.all([
+        supabase
+          .from("work_history")
+          .select("id, company, title, start_date, end_date, duration_months, is_management_role")
+          .eq("snapshot_id", snapshotId)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("skills")
+          .select("id, name, category, confidence")
+          .eq("snapshot_id", snapshotId),
+        supabase
+          .from("achievements")
+          .select("id, statement, impact, has_metric, source_text")
+          .eq("snapshot_id", snapshotId),
+        supabase
+          .from("industries")
+          .select("id, name, confidence")
+          .eq("snapshot_id", snapshotId),
+        supabase
+          .from("tools_technologies")
+          .select("id, name, category, confidence")
+          .eq("snapshot_id", snapshotId),
+      ]);
+
+    process.stdout.write(JSON.stringify({ type: "extraction_complete", snapshot_id: snapshotId, timestamp: new Date().toISOString() }) + "\n");
+
+    return NextResponse.json({
+      snapshot_id: snapshotId,
+      career_narrative: semantic.career_narrative,
+      work_history: workHistoryResult.data ?? [],
+      skills: skillsResult.data ?? [],
+      achievements: achievementsResult.data ?? [],
+      industries: industriesResult.data ?? [],
+      tools: toolsResult.data ?? [],
+    });
+  } catch (uncaughtError) {
+    const logEntry = {
+      type: "uncaught_error",
+      step: "db_persistence",
+      employee_id: employee.id,
+      error: uncaughtError instanceof Error ? uncaughtError.message : String(uncaughtError),
+      stack: uncaughtError instanceof Error ? uncaughtError.stack : undefined,
+      timestamp: new Date().toISOString(),
+    };
+    process.stdout.write(JSON.stringify(logEntry) + "\n");
+    await cleanupSnapshot();
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save extraction results");
+  }
 }
