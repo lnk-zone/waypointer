@@ -1,7 +1,12 @@
 /**
  * Professional PDF resume template using @react-pdf/renderer.
- * Clean, modern design with Waypointer Blue accent, proper typography hierarchy,
- * and ATS-friendly structure. US Letter, 0.6" margins, Inter font.
+ *
+ * Design principles (per 2025–2026 best practices):
+ * - Single-column layout for ATS compatibility
+ * - Clean typography hierarchy with proper spacing
+ * - Minimal decoration — content is the focus
+ * - Generous whitespace, no clutter
+ * - US Letter, 0.55" margins
  */
 
 import React from "react";
@@ -16,7 +21,7 @@ import {
 
 import type { ResumeDocumentProps } from "@/types/resume";
 
-// ─── Register Inter font ─────────────────────────────────────────────
+// ─── Register fonts ──────────────────────────────────────────────────
 
 Font.register({
   family: "Inter",
@@ -38,193 +43,158 @@ Font.register({
 
 // ─── Colors ──────────────────────────────────────────────────────────
 
-const COLORS = {
-  primary: "#2563EB",     // Waypointer Blue
-  primaryLight: "#EFF6FF", // Blue-50
-  text: "#111827",         // Gray-900
-  textSecondary: "#4B5563", // Gray-600
-  textMuted: "#6B7280",    // Gray-500
-  border: "#D1D5DB",       // Gray-300
-  borderLight: "#E5E7EB",  // Gray-200
-  white: "#FFFFFF",
-  skillBg: "#F3F4F6",      // Gray-100
+const C = {
+  black: "#1A1A1A",
+  dark: "#2D2D2D",
+  body: "#404040",
+  muted: "#666666",
+  light: "#999999",
+  rule: "#CCCCCC",
+  ruleLight: "#E0E0E0",
+  accent: "#2563EB",
 };
 
 // ─── Styles ──────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   page: {
     fontFamily: "Inter",
     fontSize: 9.5,
-    paddingTop: 43,    // ~0.6"
-    paddingBottom: 43,
-    paddingLeft: 43,
-    paddingRight: 43,
-    color: COLORS.text,
-    lineHeight: 1.4,
+    paddingTop: 40,
+    paddingBottom: 40,
+    paddingLeft: 40,
+    paddingRight: 40,
+    color: C.body,
+    lineHeight: 1.45,
   },
 
   // ── Header ──
-  header: {
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
-  },
-  name: {
-    fontSize: 22,
+  headerName: {
+    fontSize: 24,
     fontWeight: 700,
-    color: COLORS.text,
-    marginBottom: 4,
-    letterSpacing: 0.3,
+    color: C.black,
+    letterSpacing: 0.5,
+    marginBottom: 3,
   },
-  contact: {
+  headerContact: {
     fontSize: 9,
-    color: COLORS.textMuted,
-    letterSpacing: 0.2,
-  },
-
-  // ── Sections ──
-  section: {
+    color: C.muted,
+    letterSpacing: 0.3,
     marginBottom: 14,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-    gap: 6,
+
+  // ── Section divider (thin horizontal rule) ──
+  rule: {
+    borderBottomWidth: 0.75,
+    borderBottomColor: C.rule,
+    marginBottom: 12,
   },
-  sectionHeaderBar: {
-    width: 3,
-    height: 14,
-    backgroundColor: COLORS.primary,
-    borderRadius: 1,
-  },
-  sectionHeaderText: {
-    fontSize: 11,
+
+  // ── Section titles ──
+  sectionTitle: {
+    fontSize: 10,
     fontWeight: 700,
-    color: COLORS.primary,
+    color: C.black,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    marginTop: 14,
   },
 
   // ── Summary ──
   summary: {
     fontSize: 9.5,
     lineHeight: 1.55,
-    color: COLORS.textSecondary,
+    color: C.dark,
+    marginBottom: 2,
   },
 
-  // ── Skills ──
-  skillsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
+  // ── Skills (comma-separated, clean) ──
+  skillsText: {
+    fontSize: 9,
+    lineHeight: 1.6,
+    color: C.body,
   },
-  skillPill: {
-    backgroundColor: COLORS.skillBg,
-    borderRadius: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    fontSize: 8.5,
+  skillsBold: {
     fontWeight: 600,
-    color: COLORS.textSecondary,
   },
 
   // ── Experience ──
   expBlock: {
     marginBottom: 10,
   },
-  expHeaderRow: {
+  expRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "baseline",
-    marginBottom: 4,
-  },
-  expLeft: {
-    flex: 1,
+    marginBottom: 1,
   },
   expCompany: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: 700,
-    color: COLORS.text,
+    color: C.black,
+  },
+  expDates: {
+    fontSize: 8.5,
+    color: C.muted,
   },
   expTitle: {
     fontSize: 9.5,
     fontWeight: 600,
-    color: COLORS.primary,
-    marginTop: 1,
+    color: C.dark,
+    marginBottom: 4,
   },
-  expDates: {
-    fontSize: 8.5,
-    color: COLORS.textMuted,
-    textAlign: "right",
-  },
-  bulletRow: {
+  bullet: {
     flexDirection: "row",
-    marginBottom: 3,
-    paddingLeft: 2,
+    marginBottom: 2.5,
+    paddingLeft: 8,
   },
   bulletDot: {
-    width: 14,
+    width: 12,
     fontSize: 9.5,
-    color: COLORS.primary,
-    fontWeight: 700,
+    color: C.muted,
   },
   bulletText: {
     flex: 1,
     fontSize: 9.5,
     lineHeight: 1.45,
-    color: COLORS.textSecondary,
+    color: C.body,
   },
 
-  // ── Education / Certs ──
+  // ── Education ──
+  eduBlock: {
+    marginBottom: 4,
+  },
   eduRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 4,
+    alignItems: "baseline",
   },
   eduDegree: {
     fontSize: 9.5,
     fontWeight: 600,
-    color: COLORS.text,
-  },
-  eduInstitution: {
-    fontSize: 9,
-    color: COLORS.textSecondary,
+    color: C.dark,
   },
   eduYear: {
     fontSize: 8.5,
-    color: COLORS.textMuted,
+    color: C.muted,
   },
-  certItem: {
-    fontSize: 9.5,
-    color: COLORS.textSecondary,
-    marginBottom: 3,
+  eduInstitution: {
+    fontSize: 9,
+    color: C.muted,
   },
 
-  // ── Divider ──
-  divider: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.borderLight,
-    marginBottom: 14,
+  // ── Certifications ──
+  certItem: {
+    fontSize: 9,
+    color: C.body,
+    marginBottom: 2,
   },
 });
 
 // ─── Types ───────────────────────────────────────────────────────────
 
 export type ResumePDFProps = ResumeDocumentProps;
-
-// ─── Section Header Component ────────────────────────────────────────
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <View style={styles.sectionHeaderBar} />
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
-  );
-}
 
 // ─── Main Component ─────────────────────────────────────────────────
 
@@ -239,89 +209,83 @@ export function ResumePDF({
 }: ResumePDFProps) {
   return (
     <Document>
-      <Page size="LETTER" style={styles.page}>
-        {/* Header — Name + Contact with blue bottom border */}
-        <View style={styles.header}>
-          <Text style={styles.name}>{employeeName}</Text>
-          {contactInfo && <Text style={styles.contact}>{contactInfo}</Text>}
-        </View>
+      <Page size="LETTER" style={s.page}>
+        {/* ── Name & Contact ── */}
+        <Text style={s.headerName}>{employeeName}</Text>
+        {contactInfo && <Text style={s.headerContact}>{contactInfo}</Text>}
+        <View style={s.rule} />
 
-        {/* Summary */}
-        <View style={styles.section}>
-          <SectionHeader title="Professional Summary" />
-          <Text style={styles.summary}>{summaryStatement}</Text>
-        </View>
+        {/* ── Summary ── */}
+        <Text style={s.sectionTitle}>Summary</Text>
+        <Text style={s.summary}>{summaryStatement}</Text>
 
-        {/* Skills as pills */}
+        {/* ── Skills ── */}
         {skillsSection.length > 0 && (
-          <View style={styles.section}>
-            <SectionHeader title="Core Competencies" />
-            <View style={styles.skillsContainer}>
+          <>
+            <Text style={s.sectionTitle}>Skills</Text>
+            <Text style={s.skillsText}>
               {skillsSection.map((skill, i) => (
-                <Text key={i} style={styles.skillPill}>
-                  {skill}
-                </Text>
+                <React.Fragment key={i}>
+                  <Text style={s.skillsBold}>{skill}</Text>
+                  {i < skillsSection.length - 1 ? "  \u00B7  " : ""}
+                </React.Fragment>
               ))}
-            </View>
-          </View>
+            </Text>
+          </>
         )}
 
-        <View style={styles.divider} />
-
-        {/* Experience */}
+        {/* ── Experience ── */}
         {experienceSection.length > 0 && (
-          <View style={styles.section}>
-            <SectionHeader title="Professional Experience" />
+          <>
+            <Text style={s.sectionTitle}>Experience</Text>
             {experienceSection.map((exp, i) => (
-              <View key={i} style={styles.expBlock}>
-                <View style={styles.expHeaderRow}>
-                  <View style={styles.expLeft}>
-                    <Text style={styles.expCompany}>{exp.company}</Text>
-                    <Text style={styles.expTitle}>{exp.title}</Text>
-                  </View>
-                  <Text style={styles.expDates}>{exp.dates}</Text>
+              <View key={i} style={s.expBlock} wrap={false}>
+                <View style={s.expRow}>
+                  <Text style={s.expCompany}>{exp.company}</Text>
+                  <Text style={s.expDates}>{exp.dates}</Text>
                 </View>
+                <Text style={s.expTitle}>{exp.title}</Text>
                 {exp.bullets.map((bullet, bi) => (
-                  <View key={bi} style={styles.bulletRow}>
-                    <Text style={styles.bulletDot}>&#8226;</Text>
-                    <Text style={styles.bulletText}>{bullet}</Text>
+                  <View key={bi} style={s.bullet}>
+                    <Text style={s.bulletDot}>{"\u2022"}</Text>
+                    <Text style={s.bulletText}>{bullet}</Text>
                   </View>
                 ))}
               </View>
             ))}
-          </View>
+          </>
         )}
 
-        {/* Education */}
+        {/* ── Education ── */}
         {educationSection && educationSection.length > 0 && (
-          <View style={styles.section}>
-            <SectionHeader title="Education" />
+          <>
+            <Text style={s.sectionTitle}>Education</Text>
             {educationSection.map((edu, i) => (
-              <View key={i} style={styles.eduRow}>
-                <View>
-                  <Text style={styles.eduDegree}>
+              <View key={i} style={s.eduBlock}>
+                <View style={s.eduRow}>
+                  <Text style={s.eduDegree}>
                     {edu.degree && edu.field
                       ? `${edu.degree} in ${edu.field}`
                       : edu.degree ?? edu.field ?? "Degree"}
                   </Text>
-                  <Text style={styles.eduInstitution}>{edu.institution}</Text>
+                  {edu.year && <Text style={s.eduYear}>{edu.year}</Text>}
                 </View>
-                {edu.year && <Text style={styles.eduYear}>{edu.year}</Text>}
+                <Text style={s.eduInstitution}>{edu.institution}</Text>
               </View>
             ))}
-          </View>
+          </>
         )}
 
-        {/* Certifications */}
+        {/* ── Certifications ── */}
         {certificationsSection && certificationsSection.length > 0 && (
-          <View style={styles.section}>
-            <SectionHeader title="Certifications" />
+          <>
+            <Text style={s.sectionTitle}>Certifications</Text>
             {certificationsSection.map((cert, i) => (
-              <Text key={i} style={styles.certItem}>
+              <Text key={i} style={s.certItem}>
                 {cert}
               </Text>
             ))}
-          </View>
+          </>
         )}
       </Page>
     </Document>
