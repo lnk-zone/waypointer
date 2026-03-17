@@ -27,6 +27,7 @@ import {
 import { z } from "zod";
 
 export const runtime = "edge";
+export const maxDuration = 60;
 
 // ─── Request Validation ──────────────────────────────────────────────
 

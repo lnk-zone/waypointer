@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/paths-helpers";
 
 export const runtime = "edge";
+export const maxDuration = 60;
 
 const ROLE_PATH_SELECT_FIELDS =
   "id, title, category, why_it_fits, salary_band_min, salary_band_max, demand_level, confidence_score, skills_overlap_pct, gap_analysis, title_variations, core_keywords, ideal_company_profile, is_primary, is_custom, is_selected, sort_order";

@@ -26,6 +26,7 @@ import {
 import { z } from "zod";
 
 export const runtime = "edge";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   rejected_path_ids: z.array(z.string().uuid()).min(1),

@@ -30,6 +30,7 @@ import {
 } from "@/lib/validators/ai";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // ─── Types ───────────────────────────────────────────────────────────
 

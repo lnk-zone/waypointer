@@ -27,6 +27,7 @@ import {
 import { z } from "zod";
 
 export const runtime = "edge";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   title: z.string().min(1).max(200),

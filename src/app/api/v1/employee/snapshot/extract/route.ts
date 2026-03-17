@@ -34,6 +34,7 @@ import {
 import { z } from "zod";
 
 export const runtime = "nodejs";
+export const maxDuration = 60; // 3-pass AI extraction needs time
 
 const requestSchema = z.object({
   source: z.enum(["resume_upload", "linkedin_import"]),

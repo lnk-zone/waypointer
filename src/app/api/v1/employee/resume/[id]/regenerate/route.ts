@@ -25,6 +25,7 @@ import { assemblePathContext } from "@/lib/api/paths-helpers";
 import { z } from "zod";
 
 export const runtime = "edge";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   tone: z.enum(["professional", "confident", "conversational"]),
