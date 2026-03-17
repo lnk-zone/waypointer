@@ -1,9 +1,6 @@
 /**
- * POST /api/v1/employer/invite
- *
- * Creates seat records for invited employees. Validates emails, deduplicates,
- * checks account-level seat availability, creates seat records with status 'invited',
- * and sends invitation emails via Resend.
+ * GET  /api/v1/employer/invite — List all invited/active employees for this company
+ * POST /api/v1/employer/invite — Create seat records and send invitation emails
  *
  * Uses Node.js Runtime — needs jose for JWT token generation + Resend for email.
  */
@@ -17,6 +14,51 @@ import { z } from "zod";
 import * as jose from "jose";
 import { sendTrackedEmail } from "@/lib/email/send-tracked";
 import type { EmailTemplateData } from "@/lib/email/templates";
+
+// ─── GET Handler ──────────────────────────────────────────────────────
+
+export async function GET(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+  const roleError = requireEmployer(auth);
+  if (roleError) return roleError;
+
+  if (!auth.companyId) {
+    return apiError(ERROR_CODES.NOT_FOUND, "No company found.");
+  }
+
+  try {
+    const supabase = createServiceClient();
+
+    const { data: seats, error } = await supabase
+      .from("seats")
+      .select("id, employee_name, employee_email, department, role_family, status, invited_at, activated_at, expires_at, program_id")
+      .eq("company_id", auth.companyId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to fetch invitations");
+    }
+
+    const invitations = (seats ?? []).map((seat: Record<string, unknown>) => ({
+      id: seat.id,
+      name: seat.employee_name || "",
+      email: seat.employee_email,
+      department: seat.department || "",
+      role: seat.role_family || "",
+      status: seat.status,
+      invited_at: seat.invited_at,
+      activated_at: seat.activated_at,
+      expires_at: seat.expires_at,
+      program_id: seat.program_id,
+    }));
+
+    return NextResponse.json({ data: invitations });
+  } catch {
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to fetch invitations");
+  }
+}
 
 // ─── Request Validation ───────────────────────────────────────────────
 

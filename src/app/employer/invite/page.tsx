@@ -18,6 +18,18 @@ interface Program {
   name: string;
 }
 
+interface Invitation {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  status: string;
+  invited_at: string;
+  activated_at: string | null;
+  expires_at: string | null;
+}
+
 interface EmployeeEntry {
   name: string;
   email: string;
@@ -40,6 +52,7 @@ function InvitePageContent() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [employees, setEmployees] = useState<EmployeeEntry[]>([{ ...EMPTY_EMPLOYEE }]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -47,16 +60,19 @@ function InvitePageContent() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [balanceRes, programsRes] = await Promise.all([
+      const [balanceRes, programsRes, inviteRes] = await Promise.all([
         fetch("/api/v1/employer/seats"),
         fetch("/api/v1/employer/program"),
+        fetch("/api/v1/employer/invite"),
       ]);
 
       const balanceJson = await balanceRes.json();
       const programsJson = await programsRes.json();
+      const inviteJson = await inviteRes.json();
 
       if (balanceRes.ok && balanceJson.data) setBalance(balanceJson.data);
       if (programsRes.ok && programsJson.data) setPrograms(programsJson.data);
+      if (inviteRes.ok && inviteJson.data) setInvitations(inviteJson.data);
     } catch {
       // silently fail
     } finally {
@@ -125,10 +141,15 @@ function InvitePageContent() {
         (data.skipped_duplicates > 0 ? ` ${data.skipped_duplicates} duplicate${data.skipped_duplicates !== 1 ? "s" : ""} skipped.` : "")
       );
       setEmployees([{ ...EMPTY_EMPLOYEE }]);
-      // Refresh balance
-      const balanceRes = await fetch("/api/v1/employer/seats");
+      // Refresh balance and invitations list
+      const [balanceRes, inviteRes] = await Promise.all([
+        fetch("/api/v1/employer/seats"),
+        fetch("/api/v1/employer/invite"),
+      ]);
       const balanceJson = await balanceRes.json();
+      const inviteJson = await inviteRes.json();
       if (balanceRes.ok && balanceJson.data) setBalance(balanceJson.data);
+      if (inviteRes.ok && inviteJson.data) setInvitations(inviteJson.data);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -371,6 +392,63 @@ function InvitePageContent() {
           <button onClick={() => setSuccess("")} className="ml-auto text-green-400 hover:text-green-600">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Invitations List */}
+      {invitations.length > 0 && (
+        <div className="bg-white rounded-lg border border-border">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="text-sm font-medium text-text-primary">
+              Sent invitations ({invitations.length})
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-gray-50">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Name</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Email</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Department</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Status</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Invited</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {invitations.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3 text-text-primary font-medium">{inv.name || "—"}</td>
+                    <td className="px-5 py-3 text-text-secondary">{inv.email}</td>
+                    <td className="px-5 py-3 text-text-secondary">{inv.department || "—"}</td>
+                    <td className="px-5 py-3">
+                      <span className={cn(
+                        "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                        inv.status === "invited" && "bg-yellow-100 text-yellow-800",
+                        inv.status === "activated" && "bg-blue-100 text-blue-800",
+                        inv.status === "active" && "bg-green-100 text-green-800",
+                        inv.status === "stalled" && "bg-orange-100 text-orange-800",
+                        inv.status === "expired" && "bg-gray-100 text-gray-600",
+                        inv.status === "placed" && "bg-emerald-100 text-emerald-800",
+                        inv.status === "grace_period" && "bg-red-100 text-red-800",
+                      )}>
+                        {inv.status === "invited" && "Pending"}
+                        {inv.status === "activated" && "Activated"}
+                        {inv.status === "active" && "Active"}
+                        {inv.status === "stalled" && "Inactive"}
+                        {inv.status === "expired" && "Expired"}
+                        {inv.status === "placed" && "Placed"}
+                        {inv.status === "grace_period" && "Grace period"}
+                        {!["invited","activated","active","stalled","expired","placed","grace_period"].includes(inv.status) && inv.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-text-secondary text-xs">
+                      {inv.invited_at ? new Date(inv.invited_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
