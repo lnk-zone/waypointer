@@ -1,9 +1,12 @@
 /**
  * Resume text extraction utilities.
  * Extracts plain text from PDF and DOCX files stored in Supabase Storage.
+ *
+ * Uses `unpdf` for PDF extraction — a lightweight library designed for
+ * serverless environments (no DOM APIs, no canvas, no worker threads).
  */
 
-import { PDFParse } from "pdf-parse";
+import { extractText } from "unpdf";
 import mammoth from "mammoth";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -55,11 +58,16 @@ export async function extractTextFromStorage(
   }
 }
 
+/**
+ * Extract text from a PDF buffer using unpdf.
+ * Works in serverless environments without DOM dependencies.
+ */
 async function extractFromPDF(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
-    const result = await parser.getText();
-    const text = result.text.trim();
+    const { text: pages } = await extractText(new Uint8Array(buffer));
+
+    // unpdf returns an array of strings, one per page
+    const text = (Array.isArray(pages) ? pages.join("\n") : String(pages)).trim();
 
     if (!text || text.length < 50) {
       throw new TextExtractionError(
@@ -75,8 +83,6 @@ async function extractFromPDF(buffer: Buffer): Promise<string> {
       "Failed to parse PDF file. The file may be corrupted or password-protected.",
       "EXTRACTION_FAILED"
     );
-  } finally {
-    await parser.destroy();
   }
 }
 

@@ -1,14 +1,17 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { WaypointerLogo } from "@/components/brand/logo";
+import { createClient } from "@/lib/supabase/client";
 import {
   BarChart3,
   CreditCard,
   FolderOpen,
   LayoutDashboard,
+  LogOut,
   Users,
 } from "lucide-react";
 
@@ -22,6 +25,19 @@ const EMPLOYER_NAV_ITEMS = [
 
 export function EmployerSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/login");
+    } catch {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <aside
@@ -68,9 +84,24 @@ export function EmployerSidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-border px-4 py-3">
-        <p className="hidden lg:block text-xs text-muted">
+      {/* Logout + Footer */}
+      <div className="border-t border-border px-2 lg:px-3 py-3 space-y-2">
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className={cn(
+            "flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium transition-default w-full",
+            "justify-center lg:justify-start",
+            "text-text-secondary hover:bg-red-50 hover:text-red-600",
+            loggingOut && "opacity-50 cursor-not-allowed"
+          )}
+        >
+          <LogOut className="h-5 w-5 shrink-0" />
+          <span className="hidden lg:block">
+            {loggingOut ? "Signing out..." : "Sign Out"}
+          </span>
+        </button>
+        <p className="hidden lg:block text-xs text-muted px-3">
           Waypointer Admin
         </p>
       </div>
