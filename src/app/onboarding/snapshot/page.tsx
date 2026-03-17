@@ -348,6 +348,8 @@ function SnapshotContent() {
   const [narrativeDirty, setNarrativeDirty] = useState(false);
   const [editingWorkHistory, setEditingWorkHistory] = useState<string | null>(null);
   const [editingAchievement, setEditingAchievement] = useState<string | null>(null);
+  const [expandedWorkHistory, setExpandedWorkHistory] = useState<Set<string>>(new Set());
+  const [addingAchievementFor, setAddingAchievementFor] = useState<string | null>(null);
 
   // Saving states
   const [saving, setSaving] = useState(false);
@@ -479,6 +481,28 @@ function SnapshotContent() {
     },
     [saveUpdate]
   );
+
+  // Add achievement to a specific work history entry
+  const handleAddAchievement = useCallback(
+    (statement: string, workHistoryId: string | null) => {
+      saveUpdate({ achievements_add: [{ statement, work_history_id: workHistoryId }] });
+      setAddingAchievementFor(null);
+    },
+    [saveUpdate]
+  );
+
+  // Toggle work history accordion
+  const toggleWorkHistory = useCallback((whId: string) => {
+    setExpandedWorkHistory((prev) => {
+      const next = new Set(prev);
+      if (next.has(whId)) {
+        next.delete(whId);
+      } else {
+        next.add(whId);
+      }
+      return next;
+    });
+  }, []);
 
   // Update work history
   const handleUpdateWorkHistory = useCallback(
@@ -725,72 +749,154 @@ function SnapshotContent() {
               )}
             </section>
 
-            {/* Work history with nested achievements */}
+            {/* Work history with collapsible achievements */}
             <section className="rounded-md border border-border bg-surface p-4 shadow-sm">
               <h2 className="text-h3 text-text-primary mb-4">Work history & achievements</h2>
-              <div className="space-y-6">
+              <div className="space-y-3">
                 {snapshot.work_history.map((wh) => {
                   const roleAchievements = snapshot.achievements.filter(
                     (a) => a.work_history_id === wh.id
                   );
+                  const isExpanded = expandedWorkHistory.has(wh.id);
+                  const isEditing = editingWorkHistory === wh.id;
+
                   return (
-                    <div key={wh.id} className="space-y-3">
-                      <WorkHistoryCard
-                        item={wh}
-                        isEditing={editingWorkHistory === wh.id}
-                        onStartEdit={() => setEditingWorkHistory(wh.id)}
-                        onSave={(fields) =>
-                          handleUpdateWorkHistory(wh.id, fields)
-                        }
-                        onCancel={() => setEditingWorkHistory(null)}
-                      />
-                      {roleAchievements.length > 0 && (
-                        <div className="ml-4 border-l-2 border-primary/20 pl-4 space-y-2">
-                          {roleAchievements.map((ach) => (
-                            <AchievementCard
-                              key={ach.id}
-                              item={ach}
-                              isEditing={editingAchievement === ach.id}
-                              onStartEdit={() => setEditingAchievement(ach.id)}
-                              onSave={(statement) =>
-                                handleUpdateAchievement(ach.id, statement)
-                              }
-                              onCancel={() => setEditingAchievement(null)}
-                              onRemove={() => handleRemoveAchievement(ach.id)}
+                    <div key={wh.id} className="rounded-md border border-border overflow-hidden">
+                      {/* Work history header — click to expand, edit button separate */}
+                      {isEditing ? (
+                        <WorkHistoryCard
+                          item={wh}
+                          isEditing
+                          onStartEdit={() => {}}
+                          onSave={(fields) => handleUpdateWorkHistory(wh.id, fields)}
+                          onCancel={() => setEditingWorkHistory(null)}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2 p-4">
+                          {/* Expand/collapse toggle */}
+                          <button
+                            type="button"
+                            onClick={() => toggleWorkHistory(wh.id)}
+                            className="shrink-0 flex items-center justify-center h-6 w-6 rounded hover:bg-gray-100 transition-default"
+                            aria-label={isExpanded ? "Collapse achievements" : "Expand achievements"}
+                          >
+                            <svg
+                              width="12" height="12" viewBox="0 0 12 12"
+                              fill="none" stroke="currentColor" strokeWidth="2"
+                              className={cn("text-muted transition-transform duration-200", isExpanded && "rotate-90")}
+                            >
+                              <path d="M4 2l4 4-4 4" />
+                            </svg>
+                          </button>
+
+                          {/* Role info — clicking this also toggles */}
+                          <button
+                            type="button"
+                            onClick={() => toggleWorkHistory(wh.id)}
+                            className="flex-1 text-left min-w-0"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="text-body font-medium text-text-primary truncate">{wh.title}</p>
+                                <p className="text-body-sm text-text-secondary">{wh.company}</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-caption text-text-secondary">
+                                  {wh.start_date ?? "?"} — {wh.end_date ?? "Present"}
+                                </p>
+                                {wh.duration_months != null && wh.duration_months > 0 && (
+                                  <p className="text-caption text-muted">
+                                    {Math.floor(wh.duration_months / 12) > 0 ? `${Math.floor(wh.duration_months / 12)}yr ` : ""}
+                                    {wh.duration_months % 12 > 0 ? `${wh.duration_months % 12}mo` : ""}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            {roleAchievements.length > 0 && !isExpanded && (
+                              <p className="text-caption text-muted mt-1">
+                                {roleAchievements.length} achievement{roleAchievements.length !== 1 ? "s" : ""}
+                              </p>
+                            )}
+                          </button>
+
+                          {/* Edit button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingWorkHistory(wh.id);
+                            }}
+                            className="shrink-0 flex items-center justify-center h-7 px-2 rounded text-caption text-muted hover:text-primary hover:bg-primary-light transition-default"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Collapsible achievements panel */}
+                      {isExpanded && !isEditing && (
+                        <div className="border-t border-border bg-gray-50/50 px-4 py-3 space-y-2">
+                          {roleAchievements.length > 0 ? (
+                            roleAchievements.map((ach) => (
+                              <AchievementCard
+                                key={ach.id}
+                                item={ach}
+                                isEditing={editingAchievement === ach.id}
+                                onStartEdit={() => setEditingAchievement(ach.id)}
+                                onSave={(statement) => handleUpdateAchievement(ach.id, statement)}
+                                onCancel={() => setEditingAchievement(null)}
+                                onRemove={() => handleRemoveAchievement(ach.id)}
+                              />
+                            ))
+                          ) : (
+                            <p className="text-caption text-muted py-2 text-center">No achievements for this role yet.</p>
+                          )}
+
+                          {/* Add achievement input */}
+                          {addingAchievementFor === wh.id ? (
+                            <AddAchievementInput
+                              onAdd={(statement) => handleAddAchievement(statement, wh.id)}
+                              onCancel={() => setAddingAchievementFor(null)}
                             />
-                          ))}
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAddingAchievementFor(wh.id)}
+                              className="inline-flex items-center gap-1.5 text-caption text-muted hover:text-primary transition-default mt-1"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M6 1v10M1 6h10" />
+                              </svg>
+                              Add achievement
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })}
-                {/* Unlinked achievements (no work_history_id) */}
+                {/* Unlinked achievements */}
                 {snapshot.achievements.filter((a) => !a.work_history_id || !snapshot.work_history.some((wh) => wh.id === a.work_history_id)).length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-2 mt-4">
                     <p className="text-caption text-text-secondary font-medium">Other achievements</p>
-                    <div className="space-y-2">
-                      {snapshot.achievements
-                        .filter((a) => !a.work_history_id || !snapshot.work_history.some((wh) => wh.id === a.work_history_id))
-                        .map((ach) => (
-                          <AchievementCard
-                            key={ach.id}
-                            item={ach}
-                            isEditing={editingAchievement === ach.id}
-                            onStartEdit={() => setEditingAchievement(ach.id)}
-                            onSave={(statement) =>
-                              handleUpdateAchievement(ach.id, statement)
-                            }
-                            onCancel={() => setEditingAchievement(null)}
-                            onRemove={() => handleRemoveAchievement(ach.id)}
-                          />
-                        ))}
-                    </div>
+                    {snapshot.achievements
+                      .filter((a) => !a.work_history_id || !snapshot.work_history.some((wh) => wh.id === a.work_history_id))
+                      .map((ach) => (
+                        <AchievementCard
+                          key={ach.id}
+                          item={ach}
+                          isEditing={editingAchievement === ach.id}
+                          onStartEdit={() => setEditingAchievement(ach.id)}
+                          onSave={(statement) => handleUpdateAchievement(ach.id, statement)}
+                          onCancel={() => setEditingAchievement(null)}
+                          onRemove={() => handleRemoveAchievement(ach.id)}
+                        />
+                      ))}
                   </div>
                 )}
                 {snapshot.work_history.length === 0 && (
                   <p className="text-body-sm text-muted py-4 text-center">
-                    No work history extracted. You can add roles manually after
-                    confirmation.
+                    No work history extracted. You can add roles manually after confirmation.
                   </p>
                 )}
               </div>
@@ -1170,6 +1276,45 @@ function AchievementCard({
   }
 
   return content;
+}
+
+// ─── Add Achievement Input ───────────────────────────────────────────────
+
+function AddAchievementInput({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (statement: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState("");
+
+  return (
+    <div className="rounded-md border border-primary bg-primary-light/30 p-3 space-y-2">
+      <Textarea
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={2}
+        className="resize-none text-body-sm"
+        placeholder="Describe your achievement (e.g., Increased revenue by 20% through...)"
+      />
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => {
+            if (value.trim()) onAdd(value.trim());
+          }}
+          disabled={!value.trim()}
+        >
+          Add
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Page Export ─────────────────────────────────────────────────────────

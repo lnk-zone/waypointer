@@ -139,6 +139,7 @@ const patchSnapshotSchema = z
           statement: z.string().min(1).max(2000),
           impact: z.string().max(50).optional(),
           has_metric: z.boolean().optional(),
+          work_history_id: z.string().uuid().nullable().optional(),
         })
       )
       .optional(),
@@ -336,6 +337,7 @@ export async function PATCH(request: NextRequest) {
       statement: a.statement,
       impact: a.impact ?? null,
       has_metric: a.has_metric ?? false,
+      work_history_id: a.work_history_id ?? null,
     }));
 
     const { error } = await supabase.from("achievements").insert(rows);
