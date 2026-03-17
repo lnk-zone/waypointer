@@ -119,46 +119,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Pass 2 — EXTRACT_SEMANTIC
+  // Pass 2 + 3 — Run in parallel (both depend on structural, not each other)
   let semantic: ExtractSemanticOutput;
-  try {
-    semantic = await executeAIPipeline(
-      "EXTRACT_SEMANTIC",
-      {
-        structural_extraction_json: JSON.stringify(structural),
-        seniority: employee.seniority ?? "mid_level",
-        management_exp: employee.management_exp ?? "no_direct_reports",
-        level_dir: employee.level_dir ?? "stay_current",
-      },
-      extractSemanticSchema,
-      sessionId
-    );
-  } catch (err) {
-    return apiError(
-      ERROR_CODES.AI_ERROR,
-      err instanceof Error
-        ? `Semantic analysis failed: ${err.message}`
-        : "Failed to analyze career patterns"
-    );
-  }
-
-  // Pass 3 — EXTRACT_ACHIEVEMENTS
   let achievements: ExtractAchievementsOutput;
   try {
-    achievements = await executeAIPipeline(
-      "EXTRACT_ACHIEVEMENTS",
-      {
-        work_history_json: JSON.stringify(structural.work_history),
-      },
-      extractAchievementsSchema,
-      sessionId
-    );
+    [semantic, achievements] = await Promise.all([
+      executeAIPipeline(
+        "EXTRACT_SEMANTIC",
+        {
+          structural_extraction_json: JSON.stringify(structural),
+          seniority: employee.seniority ?? "mid_level",
+          management_exp: employee.management_exp ?? "no_direct_reports",
+          level_dir: employee.level_dir ?? "stay_current",
+        },
+        extractSemanticSchema,
+        sessionId
+      ),
+      executeAIPipeline(
+        "EXTRACT_ACHIEVEMENTS",
+        {
+          work_history_json: JSON.stringify(structural.work_history),
+        },
+        extractAchievementsSchema,
+        sessionId
+      ),
+    ]);
   } catch (err) {
     return apiError(
       ERROR_CODES.AI_ERROR,
       err instanceof Error
-        ? `Achievement extraction failed: ${err.message}`
-        : "Failed to extract achievements"
+        ? `Analysis failed: ${err.message}`
+        : "Failed to analyze career data"
     );
   }
 
