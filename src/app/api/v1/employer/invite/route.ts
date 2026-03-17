@@ -2,22 +2,14 @@
  * POST /api/v1/employer/invite
  *
  * Creates seat records for invited employees. Validates emails, deduplicates,
- * checks seat availability, and creates seat records with status 'invited'.
- *
- * Email sending is handled by E12 — this route creates the records and marks
- * seats as invited. The actual emails are triggered separately.
+ * checks account-level seat availability, and creates seat records with status 'invited'.
  *
  * Uses Edge Runtime — JSON processing only.
  */
-
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  authenticateRequest,
-  isAuthError,
-  requireEmployer,
-} from "@/lib/api/auth-middleware";
+import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { z } from "zod";
@@ -35,7 +27,7 @@ const employeeEntrySchema = z.object({
 });
 
 const inviteSchema = z.object({
-  program_id: z.string().uuid("Invalid program ID"),
+  program_id: z.string().uuid("Invalid program ID").optional(),
   employees: z
     .array(employeeEntrySchema)
     .min(1, "At least one employee is required")
@@ -43,13 +35,6 @@ const inviteSchema = z.object({
 });
 
 // ─── Types ────────────────────────────────────────────────────────────
-
-interface ProgramRecord {
-  id: string;
-  company_id: string;
-  total_seats: number;
-  used_seats: number;
-}
 
 interface InviteError {
   email: string;
@@ -61,7 +46,6 @@ interface InviteError {
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if (isAuthError(auth)) return auth;
-
   const roleError = requireEmployer(auth);
   if (roleError) return roleError;
 
@@ -85,23 +69,33 @@ export async function POST(request: NextRequest) {
     const { program_id, employees } = parsed.data;
     const supabase = createServiceClient();
 
-    // Verify program belongs to this company
-    const { data: rawProgram, error: programError } = await supabase
-      .from("transition_programs")
-      .select("id, company_id, total_seats, used_seats")
-      .eq("id", program_id)
-      .eq("company_id", auth.companyId)
-      .eq("is_active", true)
-      .single();
+    // If program_id provided, verify it belongs to this company
+    if (program_id) {
+      const { data: program, error: programError } = await supabase
+        .from("transition_programs")
+        .select("id")
+        .eq("id", program_id)
+        .eq("company_id", auth.companyId)
+        .eq("is_active", true)
+        .single();
 
-    if (programError || !rawProgram) {
-      return apiError(
-        ERROR_CODES.NOT_FOUND,
-        "Active transition program not found"
-      );
+      if (programError || !program) {
+        return apiError(ERROR_CODES.NOT_FOUND, "Program not found");
+      }
     }
 
-    const program = rawProgram as unknown as ProgramRecord;
+    // Get account-level seat balance
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("total_seats_purchased, total_seats_assigned")
+      .eq("id", auth.companyId)
+      .single();
+
+    if (companyError || !company) {
+      return apiError(ERROR_CODES.NOT_FOUND, "Company not found");
+    }
+
+    const companyData = company as { total_seats_purchased: number; total_seats_assigned: number };
 
     // Validate and deduplicate emails
     const errors: InviteError[] = [];
@@ -119,14 +113,12 @@ export async function POST(request: NextRequest) {
     for (const emp of employees) {
       const email = emp.email.trim().toLowerCase();
 
-      // Validate email format
       if (!EMAIL_RE.test(email)) {
         errors.push({ email: emp.email, reason: "Invalid email format" });
         skippedInvalid++;
         continue;
       }
 
-      // Check for duplicates within this batch
       if (seenEmails.has(email)) {
         skippedDuplicates++;
         continue;
@@ -142,8 +134,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check seat availability
-    const availableSeats = program.total_seats - program.used_seats;
+    // Check seat availability at account level
+    const availableSeats = companyData.total_seats_purchased - companyData.total_seats_assigned;
     if (validEmployees.length > availableSeats) {
       return apiError(
         ERROR_CODES.VALIDATION_ERROR,
@@ -151,7 +143,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for existing seats in batches to avoid URL length limits
+    // Check for existing seats by company (not by program)
     const existingEmails = new Set<string>();
     if (validEmployees.length > 0) {
       const emailList = validEmployees.map((e) => e.email);
@@ -161,7 +153,7 @@ export async function POST(request: NextRequest) {
         const { data: existingSeats } = await supabase
           .from("seats")
           .select("employee_email")
-          .eq("program_id", program_id)
+          .eq("company_id", auth.companyId)
           .in("employee_email", batch);
 
         if (existingSeats) {
@@ -181,24 +173,25 @@ export async function POST(request: NextRequest) {
       return true;
     });
 
-    // Atomically increment used_seats before creating records
+    // Atomically assign seats at account level
     let invited = 0;
     if (newEmployees.length > 0) {
-      const { error: rpcError } = await supabase.rpc(
-        "increment_used_seats_batch",
-        { p_program_id: program_id, p_count: newEmployees.length }
-      );
+      const { error: rpcError } = await supabase.rpc("assign_seats", {
+        p_company_id: auth.companyId,
+        p_count: newEmployees.length,
+      });
 
       if (rpcError) {
         return apiError(
           ERROR_CODES.VALIDATION_ERROR,
-          `You have ${availableSeats} seat${availableSeats !== 1 ? "s" : ""} remaining. Purchase additional seats to continue.`
+          `Not enough available seats. Purchase additional seats to continue.`
         );
       }
 
       // Create seat records
       const seatRecords = newEmployees.map((emp) => ({
-        program_id,
+        company_id: auth.companyId,
+        program_id: program_id || null,
         employee_email: emp.email,
         employee_name: emp.name || null,
         department: emp.department || null,
@@ -212,15 +205,14 @@ export async function POST(request: NextRequest) {
         .insert(seatRecords);
 
       if (insertError) {
-        // Rollback: decrement used_seats
-        Promise.resolve(supabase.rpc("increment_used_seats_batch", {
-          p_program_id: program_id,
-          p_count: -newEmployees.length,
-        })).catch(() => {});
-        return apiError(
-          ERROR_CODES.INTERNAL_ERROR,
-          "Failed to create seat records"
-        );
+        // Rollback: decrement assigned seats
+        Promise.resolve(
+          supabase.rpc("assign_seats", {
+            p_company_id: auth.companyId,
+            p_count: -newEmployees.length,
+          })
+        ).catch(() => {});
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to create seat records");
       }
 
       invited = newEmployees.length;
@@ -235,9 +227,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch {
-    return apiError(
-      ERROR_CODES.INTERNAL_ERROR,
-      "Failed to process invitations"
-    );
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to process invitations");
   }
 }
