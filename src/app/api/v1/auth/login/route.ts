@@ -47,11 +47,13 @@ export async function POST(request: NextRequest) {
     if (adminData) {
       return NextResponse.json(
         {
-          user_id: data.user.id,
-          role: "employer_admin",
-          company_id: adminData.company_id,
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
+          data: {
+            user_id: data.user.id,
+            role: "employer_admin",
+            company_id: adminData.company_id,
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          },
         },
         { status: 200 }
       );
@@ -67,11 +69,13 @@ export async function POST(request: NextRequest) {
     if (employeeData) {
       return NextResponse.json(
         {
-          user_id: data.user.id,
-          role: "employee",
-          employee_id: employeeData.id,
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
+          data: {
+            user_id: data.user.id,
+            role: "employee",
+            employee_id: employeeData.id,
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          },
         },
         { status: 200 }
       );

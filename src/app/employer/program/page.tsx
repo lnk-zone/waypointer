@@ -5,9 +5,12 @@
  *
  * Employer configures their transition program: name, seats, duration,
  * branded toggle, module toggles, custom intro message, and tier.
+ *
+ * On load, fetches the active program. If one exists, shows it in view mode
+ * with an "Edit" button. If none exists, shows the creation form.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EmployerRoute } from "@/components/auth/protected-route";
 import { EmployerLayout } from "@/components/layout/employer-sidebar";
@@ -20,6 +23,7 @@ import { programSchema } from "@/lib/validators/program";
 import {
   CheckCircle2,
   Crown,
+  Edit3,
   MessageSquare,
   Mic,
   Send,
@@ -30,6 +34,19 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────
 
 type ProgramTier = "standard" | "plus" | "premium";
+
+interface ProgramData {
+  id: string;
+  name: string;
+  tier: ProgramTier;
+  total_seats: number;
+  used_seats: number;
+  access_duration_days: number;
+  is_branded: boolean;
+  custom_intro_message?: string | null;
+  interview_coaching_enabled: boolean;
+  outreach_builder_enabled: boolean;
+}
 
 interface FormState {
   name: string;
@@ -91,20 +108,137 @@ const TIER_CONFIG: Record<
   },
 };
 
+// ─── Program View (read-only) ─────────────────────────────────────────
+
+function ProgramView({
+  program,
+  onEdit,
+}: {
+  program: ProgramData;
+  onEdit: () => void;
+}) {
+  const tier = TIER_CONFIG[program.tier] ?? TIER_CONFIG.standard;
+
+  return (
+    <div className="max-w-xl mx-auto px-4 py-8">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary mb-1">
+            {program.name}
+          </h1>
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "text-xs font-medium px-2 py-0.5 rounded",
+                tier.bgColor,
+                tier.color
+              )}
+            >
+              {tier.label}
+            </span>
+            <span className="text-sm text-text-secondary">
+              {program.used_seats} / {program.total_seats} seats used
+            </span>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={onEdit} className="gap-1.5">
+          <Edit3 className="h-3.5 w-3.5" />
+          Edit
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {/* Details Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-xs text-text-secondary mb-1">Access Duration</p>
+            <p className="text-lg font-semibold text-text-primary">
+              {program.access_duration_days} days
+            </p>
+          </div>
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-xs text-text-secondary mb-1">Seats Remaining</p>
+            <p className="text-lg font-semibold text-text-primary">
+              {program.total_seats - program.used_seats}
+            </p>
+          </div>
+        </div>
+
+        {/* Features */}
+        <div className="rounded-lg border border-border p-4 space-y-3">
+          <p className="text-sm font-medium text-text-primary">Features</p>
+          <div className="space-y-2">
+            <FeatureRow
+              label="Branded Experience"
+              enabled={program.is_branded}
+            />
+            <FeatureRow
+              label="Interview Coaching"
+              enabled={program.interview_coaching_enabled}
+            />
+            <FeatureRow
+              label="Outreach Builder"
+              enabled={program.outreach_builder_enabled}
+            />
+          </div>
+        </div>
+
+        {/* Intro Message */}
+        {program.custom_intro_message && (
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-sm font-medium text-text-primary mb-2">
+              Intro Message
+            </p>
+            <p className="text-sm text-text-secondary whitespace-pre-wrap">
+              {program.custom_intro_message}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FeatureRow({ label, enabled }: { label: string; enabled: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-text-secondary">{label}</span>
+      <span
+        className={cn(
+          "text-xs font-medium px-2 py-0.5 rounded",
+          enabled
+            ? "bg-[#059669]/10 text-[#059669]"
+            : "bg-gray-100 text-text-secondary"
+        )}
+      >
+        {enabled ? "Enabled" : "Disabled"}
+      </span>
+    </div>
+  );
+}
+
 // ─── Program Form ─────────────────────────────────────────────────────
 
-function ProgramForm() {
+function ProgramForm({
+  initial,
+  onSaved,
+}: {
+  initial?: ProgramData | null;
+  onSaved: (program: ProgramData) => void;
+}) {
   const router = useRouter();
+  const isEditing = !!initial;
 
   const [form, setForm] = useState<FormState>({
-    name: "",
-    tier: "standard",
-    total_seats: 10,
-    access_duration_days: 90,
-    is_branded: true,
-    custom_intro_message: "",
-    interview_coaching_enabled: true,
-    outreach_builder_enabled: true,
+    name: initial?.name ?? "",
+    tier: initial?.tier ?? "standard",
+    total_seats: initial?.total_seats ?? 10,
+    access_duration_days: initial?.access_duration_days ?? 90,
+    is_branded: initial?.is_branded ?? true,
+    custom_intro_message: initial?.custom_intro_message ?? "",
+    interview_coaching_enabled: initial?.interview_coaching_enabled ?? true,
+    outreach_builder_enabled: initial?.outreach_builder_enabled ?? true,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -134,7 +268,7 @@ function ProgramForm() {
 
       try {
         const res = await fetch("/api/v1/employer/program", {
-          method: "POST",
+          method: isEditing ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: form.name.trim(),
@@ -151,20 +285,27 @@ function ProgramForm() {
         if (!res.ok) {
           const errJson = await res.json().catch(() => null);
           throw new Error(
-            errJson?.error?.message ?? "Failed to create program"
+            errJson?.error?.message ?? "Failed to save program"
           );
         }
 
-        router.push("/employer/invite");
+        const body = await res.json();
+        if (body.data) {
+          onSaved(body.data);
+        }
+
+        if (!isEditing) {
+          router.push("/employer/invite");
+        }
       } catch (err) {
         setSubmitError(
-          err instanceof Error ? err.message : "Failed to create program"
+          err instanceof Error ? err.message : "Failed to save program"
         );
       } finally {
         setSubmitting(false);
       }
     },
-    [form, router]
+    [form, router, isEditing, onSaved]
   );
 
   const currentTier = TIER_CONFIG[form.tier];
@@ -177,10 +318,12 @@ function ProgramForm() {
           <Settings className="h-8 w-8 text-primary" />
         </div>
         <h1 className="text-2xl font-semibold text-text-primary mb-1">
-          Program Settings
+          {isEditing ? "Edit Program" : "Program Settings"}
         </h1>
         <p className="text-sm text-text-secondary max-w-sm mx-auto">
-          Configure your transition program. You can adjust these settings later.
+          {isEditing
+            ? "Update your transition program settings."
+            : "Configure your transition program. You can adjust these settings later."}
         </p>
       </div>
 
@@ -421,26 +564,95 @@ function ProgramForm() {
           </div>
         )}
 
-        {/* Submit */}
-        <Button
-          type="submit"
-          disabled={submitting}
-          className="w-full gap-2"
-        >
-          {submitting ? "Saving program..." : "Save Program"}
-        </Button>
+        {/* Buttons */}
+        <div className="flex gap-3">
+          {isEditing && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onSaved(initial!)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          )}
+          <Button
+            type="submit"
+            disabled={submitting}
+            className={cn(isEditing ? "flex-1" : "w-full", "gap-2")}
+          >
+            {submitting
+              ? "Saving..."
+              : isEditing
+                ? "Update Program"
+                : "Save Program"}
+          </Button>
+        </div>
       </div>
     </form>
+  );
+}
+
+// ─── Loading Skeleton ─────────────────────────────────────────────────
+
+function ProgramSkeleton() {
+  return (
+    <div className="max-w-xl mx-auto px-4 py-8">
+      <div className="space-y-4">
+        <div className="h-8 w-64 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+        <div className="h-4 w-40 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          <div className="h-20 animate-shimmer rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+          <div className="h-20 animate-shimmer rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+        </div>
+        <div className="h-32 animate-shimmer rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+      </div>
+    </div>
   );
 }
 
 // ─── Page Export ──────────────────────────────────────────────────────
 
 export default function EmployerProgramPage() {
+  const [loading, setLoading] = useState(true);
+  const [program, setProgram] = useState<ProgramData | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    async function fetchProgram() {
+      try {
+        const res = await fetch("/api/v1/employer/program/active");
+        if (res.ok) {
+          const body = await res.json();
+          if (body.data) {
+            setProgram(body.data);
+          }
+        }
+      } catch {
+        // No program found — show creation form
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProgram();
+  }, []);
+
   return (
     <EmployerRoute>
       <EmployerLayout>
-        <ProgramForm />
+        {loading ? (
+          <ProgramSkeleton />
+        ) : program && !editing ? (
+          <ProgramView program={program} onEdit={() => setEditing(true)} />
+        ) : (
+          <ProgramForm
+            initial={editing ? program : null}
+            onSaved={(saved) => {
+              setProgram(saved);
+              setEditing(false);
+            }}
+          />
+        )}
       </EmployerLayout>
     </EmployerRoute>
   );

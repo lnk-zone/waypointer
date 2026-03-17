@@ -91,11 +91,13 @@ export async function POST(request: NextRequest) {
       // Records are created successfully but session failed — return success without tokens
       return NextResponse.json(
         {
-          user_id: authData.user.id,
-          role: "employer_admin",
-          company_id: company.id,
-          access_token: null,
-          refresh_token: null,
+          data: {
+            user_id: authData.user.id,
+            role: "employer_admin",
+            company_id: company.id,
+            access_token: null,
+            refresh_token: null,
+          },
         },
         { status: 201 }
       );
@@ -103,11 +105,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        user_id: authData.user.id,
-        role: "employer_admin",
-        company_id: company.id,
-        access_token: session.session?.access_token ?? null,
-        refresh_token: session.session?.refresh_token ?? null,
+        data: {
+          user_id: authData.user.id,
+          role: "employer_admin",
+          company_id: company.id,
+          access_token: session.session?.access_token ?? null,
+          refresh_token: session.session?.refresh_token ?? null,
+        },
       },
       { status: 201 }
     );
