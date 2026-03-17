@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
     const logEntry = {
       type: "db_error",
       step,
-      employee_id: employee.id,
+      employee_id: employee!.id,
       error: error?.message,
       code: error?.code,
       details: error?.details,
@@ -429,7 +429,7 @@ export async function POST(request: NextRequest) {
     const logEntry = {
       type: "uncaught_error",
       step: "db_persistence",
-      employee_id: employee.id,
+      employee_id: employee!.id,
       error: uncaughtError instanceof Error ? uncaughtError.message : String(uncaughtError),
       stack: uncaughtError instanceof Error ? uncaughtError.stack : undefined,
       timestamp: new Date().toISOString(),
