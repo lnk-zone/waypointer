@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   // Get primary role path
   const { data: primaryPath, error: pathError } = await supabase
     .from("role_paths")
-    .select("id, title, match_score, gap_analysis, core_keywords, seniority_fit")
+    .select("id, title, confidence_score, gap_analysis, core_keywords")
     .eq("employee_id", employee.id)
     .eq("is_primary", true)
     .single();
