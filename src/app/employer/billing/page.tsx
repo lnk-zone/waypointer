@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, ShoppingCart, Users, Package } from "lucide-react";
+import { EmployerRoute } from "@/components/auth/protected-route";
+import { EmployerLayout } from "@/components/layout/employer-sidebar";
 
 interface SeatBalance {
   total_purchased: number;
@@ -19,7 +21,7 @@ interface PurchaseRecord {
   date: string;
 }
 
-export default function BillingPage() {
+function BillingPageContent() {
   const router = useRouter();
   const [balance, setBalance] = useState<SeatBalance | null>(null);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
@@ -174,5 +176,15 @@ export default function BillingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <EmployerRoute>
+      <EmployerLayout>
+        <BillingPageContent />
+      </EmployerLayout>
+    </EmployerRoute>
   );
 }

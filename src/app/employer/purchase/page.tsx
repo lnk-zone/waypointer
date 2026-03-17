@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { calculateTotal, PRICING_TIERS, MIN_SEAT_PURCHASE } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Minus, Plus, ShoppingCart, Users } from "lucide-react";
+import { EmployerRoute } from "@/components/auth/protected-route";
+import { EmployerLayout } from "@/components/layout/employer-sidebar";
 
 type PurchaseState = "input" | "processing" | "success";
 
@@ -16,7 +18,7 @@ interface PurchaseResult {
   };
 }
 
-export default function PurchasePage() {
+function PurchasePageContent() {
   const router = useRouter();
   const [quantity, setQuantity] = useState(10);
   const [state, setState] = useState<PurchaseState>("input");
@@ -221,5 +223,15 @@ export default function PurchasePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PurchasePage() {
+  return (
+    <EmployerRoute>
+      <EmployerLayout>
+        <PurchasePageContent />
+      </EmployerLayout>
+    </EmployerRoute>
   );
 }

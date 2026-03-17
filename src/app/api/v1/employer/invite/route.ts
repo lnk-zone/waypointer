@@ -2,17 +2,21 @@
  * POST /api/v1/employer/invite
  *
  * Creates seat records for invited employees. Validates emails, deduplicates,
- * checks account-level seat availability, and creates seat records with status 'invited'.
+ * checks account-level seat availability, creates seat records with status 'invited',
+ * and sends invitation emails via Resend.
  *
- * Uses Edge Runtime — JSON processing only.
+ * Uses Node.js Runtime — needs jose for JWT token generation + Resend for email.
  */
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { z } from "zod";
+import * as jose from "jose";
+import { sendTrackedEmail } from "@/lib/email/send-tracked";
+import type { EmailTemplateData } from "@/lib/email/templates";
 
 // ─── Request Validation ───────────────────────────────────────────────
 
@@ -218,29 +222,74 @@ export async function POST(request: NextRequest) {
 
       invited = newEmployees.length;
 
-      // Fire off invitation emails via internal API (non-blocking)
-      const seatIds = (insertedSeats as unknown as Array<{ id: string }>).map((s) => s.id);
-      if (seatIds.length > 0) {
-        const origin = request.headers.get("origin") || request.nextUrl.origin;
-        // Forward the auth cookie so the email endpoint can authenticate
-        const cookieHeader = request.headers.get("cookie") || "";
-        const authHeader = request.headers.get("authorization") || "";
+      // Send invitation emails directly
+      const insertedSeatIds = (insertedSeats as unknown as Array<{ id: string }>).map((s) => s.id);
+      if (insertedSeatIds.length > 0) {
+        // Fetch company info for email branding
+        const { data: rawCompany } = await supabase
+          .from("companies")
+          .select("name, logo_url")
+          .eq("id", auth.companyId)
+          .single();
 
-        // Fire and don't block the response — emails send in background
-        fetch(`${origin}/api/v1/email/send`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(cookieHeader && { Cookie: cookieHeader }),
-            ...(authHeader && { Authorization: authHeader }),
-          },
-          body: JSON.stringify({
-            seat_ids: seatIds,
-            template_type: "invitation",
-          }),
-        }).catch(() => {
-          // Email sending failure is non-fatal — seats are created
+        const companyInfo = rawCompany as { name: string; logo_url: string | null } | null;
+        const companyName = companyInfo?.name ?? "Your Company";
+
+        // Generate logo presigned URL if exists
+        let logoUrl: string | null = null;
+        if (companyInfo?.logo_url) {
+          const { data: signedData } = await supabase.storage
+            .from("waypointer-files")
+            .createSignedUrl(companyInfo.logo_url, 3600);
+          logoUrl = signedData?.signedUrl ?? null;
+        }
+
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+          || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://getwaypointer.com");
+
+        // Send emails to each new invite (non-blocking — don't fail the invite if email fails)
+        const emailPromises = newEmployees.map(async (emp, idx) => {
+          try {
+            const seatId = insertedSeatIds[idx];
+
+            // Generate JWT activation token
+            const secret = new TextEncoder().encode(process.env.SUPABASE_SERVICE_ROLE_KEY!);
+            const token = await new jose.SignJWT({
+              seat_id: seatId,
+              email: emp.email,
+              ...(program_id && { program_id }),
+            })
+              .setProtectedHeader({ alg: "HS256" })
+              .setExpirationTime("30d")
+              .setIssuedAt()
+              .sign(secret);
+
+            const activationLink = `${baseUrl}/activate?token=${encodeURIComponent(token)}`;
+
+            const templateData: EmailTemplateData = {
+              recipientName: emp.name || "there",
+              companyName,
+              companyLogoUrl: logoUrl,
+              activationLink,
+              loginLink: `${baseUrl}/login`,
+              unsubscribeLink: `${baseUrl}/unsubscribe?seat=${seatId}`,
+            };
+
+            await sendTrackedEmail({
+              supabase,
+              seatId,
+              recipientEmail: emp.email,
+              templateType: "invitation",
+              templateData,
+              baseUrl,
+            });
+          } catch {
+            // Email failure is non-fatal — seat is already created
+          }
         });
+
+        // Wait for all emails but don't block response on individual failures
+        await Promise.allSettled(emailPromises);
       }
     }
 

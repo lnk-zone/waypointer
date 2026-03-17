@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
 import { FolderPlus, Pencil, Users, X } from "lucide-react";
+import { EmployerRoute } from "@/components/auth/protected-route";
+import { EmployerLayout } from "@/components/layout/employer-sidebar";
 
 interface Program {
   id: string;
@@ -26,7 +27,7 @@ const EMPTY_FORM: ProgramFormData = {
   is_branded: true,
 };
 
-export default function ProgramsPage() {
+function ProgramsPageContent() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -304,5 +305,15 @@ export default function ProgramsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ProgramsPage() {
+  return (
+    <EmployerRoute>
+      <EmployerLayout>
+        <ProgramsPageContent />
+      </EmployerLayout>
+    </EmployerRoute>
   );
 }

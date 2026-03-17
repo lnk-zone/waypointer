@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AlertCircle, Plus, Send, Trash2, Upload, Users, X } from "lucide-react";
+import { EmployerRoute } from "@/components/auth/protected-route";
+import { EmployerLayout } from "@/components/layout/employer-sidebar";
 
 interface SeatBalance {
   total_purchased: number;
@@ -32,7 +34,7 @@ const EMPTY_EMPLOYEE: EmployeeEntry = {
   last_day: "",
 };
 
-export default function InvitePage() {
+function InvitePageContent() {
   const router = useRouter();
   const [balance, setBalance] = useState<SeatBalance | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -372,5 +374,15 @@ export default function InvitePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function InvitePage() {
+  return (
+    <EmployerRoute>
+      <EmployerLayout>
+        <InvitePageContent />
+      </EmployerLayout>
+    </EmployerRoute>
   );
 }
