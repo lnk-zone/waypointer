@@ -26,7 +26,7 @@ import {
 } from "@/lib/validators/ai";
 import { z } from "zod";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // ─── Request Validation ──────────────────────────────────────────────

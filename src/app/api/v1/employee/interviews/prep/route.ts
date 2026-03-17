@@ -11,7 +11,7 @@
  * Uses Edge Runtime for lower cold start (single AI call proxy).
  */
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";

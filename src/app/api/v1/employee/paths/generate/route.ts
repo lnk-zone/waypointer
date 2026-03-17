@@ -27,7 +27,7 @@ import {
   assemblePathContext,
 } from "@/lib/api/paths-helpers";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const ROLE_PATH_SELECT_FIELDS =
