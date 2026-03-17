@@ -51,7 +51,7 @@ async function fetchSnapshotData(supabase: SupabaseClient, snapshotId: string) {
       .eq("snapshot_id", snapshotId),
     supabase
       .from("achievements")
-      .select("id, statement, impact, has_metric, source_text")
+      .select("id, statement, impact, has_metric, source_text, work_history_id")
       .eq("snapshot_id", snapshotId),
     supabase
       .from("industries")

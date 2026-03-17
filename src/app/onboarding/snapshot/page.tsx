@@ -48,6 +48,7 @@ interface AchievementItem {
   impact: string;
   has_metric: boolean;
   source_text: string | null;
+  work_history_id: string | null;
 }
 
 interface IndustryItem {
@@ -724,22 +725,68 @@ function SnapshotContent() {
               )}
             </section>
 
-            {/* Work history */}
+            {/* Work history with nested achievements */}
             <section className="rounded-md border border-border bg-surface p-4 shadow-sm">
-              <h2 className="text-h3 text-text-primary mb-4">Work history</h2>
-              <div className="space-y-3">
-                {snapshot.work_history.map((wh) => (
-                  <WorkHistoryCard
-                    key={wh.id}
-                    item={wh}
-                    isEditing={editingWorkHistory === wh.id}
-                    onStartEdit={() => setEditingWorkHistory(wh.id)}
-                    onSave={(fields) =>
-                      handleUpdateWorkHistory(wh.id, fields)
-                    }
-                    onCancel={() => setEditingWorkHistory(null)}
-                  />
-                ))}
+              <h2 className="text-h3 text-text-primary mb-4">Work history & achievements</h2>
+              <div className="space-y-6">
+                {snapshot.work_history.map((wh) => {
+                  const roleAchievements = snapshot.achievements.filter(
+                    (a) => a.work_history_id === wh.id
+                  );
+                  return (
+                    <div key={wh.id} className="space-y-3">
+                      <WorkHistoryCard
+                        item={wh}
+                        isEditing={editingWorkHistory === wh.id}
+                        onStartEdit={() => setEditingWorkHistory(wh.id)}
+                        onSave={(fields) =>
+                          handleUpdateWorkHistory(wh.id, fields)
+                        }
+                        onCancel={() => setEditingWorkHistory(null)}
+                      />
+                      {roleAchievements.length > 0 && (
+                        <div className="ml-4 border-l-2 border-primary/20 pl-4 space-y-2">
+                          {roleAchievements.map((ach) => (
+                            <AchievementCard
+                              key={ach.id}
+                              item={ach}
+                              isEditing={editingAchievement === ach.id}
+                              onStartEdit={() => setEditingAchievement(ach.id)}
+                              onSave={(statement) =>
+                                handleUpdateAchievement(ach.id, statement)
+                              }
+                              onCancel={() => setEditingAchievement(null)}
+                              onRemove={() => handleRemoveAchievement(ach.id)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Unlinked achievements (no work_history_id) */}
+                {snapshot.achievements.filter((a) => !a.work_history_id || !snapshot.work_history.some((wh) => wh.id === a.work_history_id)).length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-caption text-text-secondary font-medium">Other achievements</p>
+                    <div className="space-y-2">
+                      {snapshot.achievements
+                        .filter((a) => !a.work_history_id || !snapshot.work_history.some((wh) => wh.id === a.work_history_id))
+                        .map((ach) => (
+                          <AchievementCard
+                            key={ach.id}
+                            item={ach}
+                            isEditing={editingAchievement === ach.id}
+                            onStartEdit={() => setEditingAchievement(ach.id)}
+                            onSave={(statement) =>
+                              handleUpdateAchievement(ach.id, statement)
+                            }
+                            onCancel={() => setEditingAchievement(null)}
+                            onRemove={() => handleRemoveAchievement(ach.id)}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )}
                 {snapshot.work_history.length === 0 && (
                   <p className="text-body-sm text-muted py-4 text-center">
                     No work history extracted. You can add roles manually after
@@ -783,31 +830,6 @@ function SnapshotContent() {
                       <AddSkillInput category="domain" onAdd={handleAddSkill} />
                     </div>
                   </div>
-                )}
-              </div>
-            </section>
-
-            {/* Achievements */}
-            <section className="rounded-md border border-border bg-surface p-4 shadow-sm">
-              <h2 className="text-h3 text-text-primary mb-4">Achievements</h2>
-              <div className="space-y-3">
-                {snapshot.achievements.map((ach) => (
-                  <AchievementCard
-                    key={ach.id}
-                    item={ach}
-                    isEditing={editingAchievement === ach.id}
-                    onStartEdit={() => setEditingAchievement(ach.id)}
-                    onSave={(statement) =>
-                      handleUpdateAchievement(ach.id, statement)
-                    }
-                    onCancel={() => setEditingAchievement(null)}
-                    onRemove={() => handleRemoveAchievement(ach.id)}
-                  />
-                ))}
-                {snapshot.achievements.length === 0 && (
-                  <p className="text-body-sm text-muted py-4 text-center">
-                    No achievements extracted from your resume.
-                  </p>
                 )}
               </div>
             </section>

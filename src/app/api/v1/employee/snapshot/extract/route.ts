@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
 
   // Wrap all DB persistence in try/catch to catch any uncaught errors
   try {
-    // Insert work_history rows
+    // Insert work_history rows and get back IDs for achievement linking
     const workHistoryRows = structural.work_history.map((wh, index) => ({
       snapshot_id: snapshotId,
       company: wh.company,
@@ -266,14 +266,23 @@ export async function POST(request: NextRequest) {
       sort_order: index,
     }));
 
+    // Map of "company|title" -> work_history row ID (for linking achievements)
+    const workHistoryIdMap = new Map<string, string>();
+
     if (workHistoryRows.length > 0) {
-      const { error: whError } = await supabase
+      const { data: insertedWH, error: whError } = await supabase
         .from("work_history")
-        .insert(workHistoryRows);
+        .insert(workHistoryRows)
+        .select("id, company, title");
       if (whError) {
         logDbError("insert_work_history", whError);
         await cleanupSnapshot();
         return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save work history");
+      }
+      // Build lookup map for achievement → work_history linking
+      for (const wh of insertedWH ?? []) {
+        const key = `${wh.company}|${wh.title}`.toLowerCase();
+        workHistoryIdMap.set(key, wh.id);
       }
     }
 
@@ -304,14 +313,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Insert achievements rows
-    const achievementRows = achievements.achievements.map((a) => ({
-      snapshot_id: snapshotId,
-      statement: a.statement,
-      source_text: a.source_text,
-      impact: a.impact_type,
-      has_metric: a.has_metric,
-    }));
+    // Insert achievements rows, linking each to its work_history entry via role_company
+    const achievementRows = achievements.achievements.map((a) => {
+      // Match achievement's role_company against work_history entries
+      let workHistoryId: string | null = null;
+      if (a.role_company) {
+        // Try exact match first: "Company / Title" or "Company"
+        for (const [key, id] of Array.from(workHistoryIdMap.entries())) {
+          const rc = a.role_company.toLowerCase();
+          const [company, title] = key.split("|");
+          if (rc.includes(company) || (title && rc.includes(title))) {
+            workHistoryId = id;
+            break;
+          }
+        }
+      }
+      return {
+        snapshot_id: snapshotId,
+        statement: a.statement,
+        source_text: a.source_text,
+        impact: a.impact_type,
+        has_metric: a.has_metric,
+        work_history_id: workHistoryId,
+      };
+    });
 
     if (achievementRows.length > 0) {
       const { error: achError } = await supabase
@@ -402,7 +427,7 @@ export async function POST(request: NextRequest) {
           .eq("snapshot_id", snapshotId),
         supabase
           .from("achievements")
-          .select("id, statement, impact, has_metric, source_text")
+          .select("id, statement, impact, has_metric, source_text, work_history_id")
           .eq("snapshot_id", snapshotId),
         supabase
           .from("industries")
