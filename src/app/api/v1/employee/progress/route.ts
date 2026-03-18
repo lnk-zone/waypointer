@@ -187,12 +187,12 @@ export async function GET(request: NextRequest) {
         .select("id", { count: "exact", head: true })
         .eq("employee_id", employee.id)
         .not("completed_at", "is", null),
-      // Interviews landed (real interview invitations — tracked via activity_log)
+      // Interviews landed (applications with status "interviewing" or "offer")
       supabase
-        .from("activity_log")
+        .from("applications")
         .select("id", { count: "exact", head: true })
         .eq("employee_id", employee.id)
-        .eq("action", "interview_landed"),
+        .in("status", ["interviewing", "offer"]),
       // Activity dates for streak and weekly activity (last 28 days)
       supabase
         .from("activity_log")
