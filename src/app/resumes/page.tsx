@@ -398,11 +398,10 @@ function ResumeWorkspace() {
 
     try {
       const res = await fetch(
-        `/api/v1/employee/resume/${resume.resume_id}/regenerate`,
+        `/api/v1/employee/resume/${resume.resume_id}/score`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tone: resume.tone }),
         }
       );
 
@@ -412,20 +411,28 @@ function ResumeWorkspace() {
       }
 
       const result = await res.json();
+      const newScores = result.data?.scores;
 
       setResumes((prev) =>
         prev.map((r, i) =>
           i === activeTab
             ? {
                 ...r,
-                resume_id: result.resume_id,
-                version: result.version,
-                summary_statement: result.summary_statement,
-                skills_section: result.skills_section ?? [],
-                experience_section: result.experience_section ?? [],
-                keywords: result.keywords ?? [],
-                full_content: result.full_content ?? null,
-                scores: result.scores ?? r.scores,
+                scores: newScores
+                  ? {
+                      ats: newScores.ats_score,
+                      clarity: newScores.clarity_score,
+                      specificity: newScores.specificity_score,
+                      feedback: {
+                        ats_feedback: newScores.ats_feedback ?? "",
+                        clarity_feedback: newScores.clarity_feedback ?? "",
+                        specificity_feedback: newScores.specificity_feedback ?? "",
+                        missing_metrics: newScores.missing_metrics ?? [],
+                        weak_bullets: newScores.weak_bullets ?? [],
+                        general_suggestions: newScores.general_suggestions ?? [],
+                      },
+                    }
+                  : r.scores,
               }
             : r
         )
