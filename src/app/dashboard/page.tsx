@@ -181,10 +181,38 @@ function DashboardContent() {
   const [selectedPaths, setSelectedPaths] = useState<SelectedPath[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [liveReadiness, setLiveReadiness] = useState<{ score: number; breakdown: ReadinessBreakdown } | null>(null);
 
   const generationStarted = useRef(false);
   const messageTimers = useRef<NodeJS.Timeout[]>([]);
   const longWaitTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch live readiness from progress API (single source of truth)
+  useEffect(() => {
+    async function fetchReadiness() {
+      try {
+        const res = await fetch("/api/v1/employee/progress");
+        if (!res.ok) return;
+        const json = await res.json();
+        const d = json.data;
+        if (d && typeof d.readiness_score === "number") {
+          setLiveReadiness({
+            score: d.readiness_score,
+            breakdown: {
+              resume: d.resumes_completed > 0 ? 100 : 0,
+              linkedin: d.linkedin_updated ? 100 : 0,
+              jobs: d.applications_tracked > 0 ? 100 : 0,
+              outreach: d.outreach_sent > 0 ? 100 : 0,
+              interviews: d.interviews_practiced > 0 ? 100 : 0,
+            },
+          });
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+    fetchReadiness();
+  }, []);
 
   const clearTimers = useCallback(() => {
     messageTimers.current.forEach(clearTimeout);
@@ -412,13 +440,14 @@ function DashboardContent() {
           </h2>
 
           <div className="flex justify-center">
-            <ReadinessRing score={plan.readiness_score} />
+            <ReadinessRing score={liveReadiness?.score ?? plan.readiness_score} />
           </div>
 
           {/* Breakdown bars */}
           <div className="space-y-3">
             {READINESS_AREAS.map(({ key, label }) => {
-              const value = plan.readiness_breakdown[key];
+              const breakdown = liveReadiness?.breakdown ?? plan.readiness_breakdown;
+              const value = breakdown[key];
               return (
                 <div key={key} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">

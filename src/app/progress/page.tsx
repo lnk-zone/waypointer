@@ -98,6 +98,7 @@ interface ProgressData {
   weekly_activity: { week: number; actions: number }[];
   milestones: Milestone[];
   confidence_history: { week: number; score: number }[];
+  readiness_score: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -278,10 +279,10 @@ function MilestoneTimeline({ milestones }: { milestones: Milestone[] }) {
 
 // ─── Progress Readiness Bar ──────────────────────────────────────────
 
-function ReadinessBar({ milestones }: { milestones: Milestone[] }) {
+function ReadinessBar({ milestones, readinessScore }: { milestones: Milestone[]; readinessScore: number }) {
   const achieved = milestones.filter((m) => m.achieved).length;
   const total = milestones.length;
-  const pct = total > 0 ? Math.round((achieved / total) * 100) : 0;
+  const pct = readinessScore;
 
   return (
     <div className="rounded-lg border border-border bg-surface p-5">
@@ -546,7 +547,7 @@ function ProgressTracker() {
       )}
 
       {/* Readiness bar */}
-      <ReadinessBar milestones={data.milestones} />
+      <ReadinessBar milestones={data.milestones} readinessScore={data.readiness_score} />
 
       {/* Metric cards grid */}
       <div className="grid grid-cols-2 gap-3">
