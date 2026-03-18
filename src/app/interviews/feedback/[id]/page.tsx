@@ -377,7 +377,7 @@ function FeedbackContent() {
           <p className="text-2xl font-bold text-text-primary">
             {feedback.filler_word_count}
           </p>
-          {feedback.filler_words_noted.length > 0 && (
+          {feedback.filler_words_noted && feedback.filler_words_noted.length > 0 && (
             <p className="text-[10px] text-text-secondary mt-0.5 truncate">
               {feedback.filler_words_noted.slice(0, 4).join(", ")}
               {feedback.filler_words_noted.length > 4 ? "…" : ""}
@@ -406,7 +406,7 @@ function FeedbackContent() {
       </div>
 
       {/* Strongest stories */}
-      {feedback.strongest_stories.length > 0 && (
+      {feedback.strongest_stories && feedback.strongest_stories.length > 0 && (
         <div className="rounded-lg border border-border bg-surface p-5">
           <div className="flex items-center gap-2 mb-3">
             <Star className="h-5 w-5 text-[#D97706]" />
@@ -432,7 +432,7 @@ function FeedbackContent() {
       )}
 
       {/* Answer-by-answer breakdown */}
-      {feedback.answer_analyses.length > 0 && (
+      {feedback.answer_analyses && feedback.answer_analyses.length > 0 && (
         <div className="rounded-lg border border-border bg-surface p-5">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="h-5 w-5 text-primary" />
@@ -499,7 +499,7 @@ function FeedbackContent() {
       )}
 
       {/* Weak answers with coaching */}
-      {feedback.weak_answers.length > 0 && (
+      {feedback.weak_answers && feedback.weak_answers.length > 0 && (
         <div className="rounded-lg border border-border bg-surface p-5">
           <div className="flex items-center gap-2 mb-3">
             <Lightbulb className="h-5 w-5 text-primary" />

@@ -248,8 +248,6 @@ export async function POST(request: NextRequest) {
       .from("weekly_plans")
       .update({
         items: storedItems,
-        week_focus: plan.week_focus,
-        encouragement: plan.encouragement,
       })
       .eq("id", existing.id);
 
@@ -269,8 +267,6 @@ export async function POST(request: NextRequest) {
         week_number: weekNumber,
         week_start: weekStart,
         items: storedItems,
-        week_focus: plan.week_focus,
-        encouragement: plan.encouragement,
       })
       .select("id")
       .single();

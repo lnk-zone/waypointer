@@ -325,7 +325,7 @@ export async function GET(request: NextRequest) {
             : null,
       },
       {
-        name: "First interview",
+        name: "First mock interview",
         achieved: interviewsPracticed > 0,
         achieved_at:
           firstInterviewResult.data && firstInterviewResult.data.length > 0
