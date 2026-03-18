@@ -37,6 +37,8 @@ interface JobListing {
   source_url: string | null;
 }
 
+type ApplicationStatus = "saved" | "applied" | "interviewing" | "offer" | "closed";
+
 interface JobMatch {
   id: string;
   fit: "high_fit" | "stretch" | "low_fit";
@@ -46,6 +48,8 @@ interface JobMatch {
   role_path_id: string | null;
   created_at: string;
   job_listings: JobListing;
+  application_status: ApplicationStatus | null;
+  applied_at: string | null;
 }
 
 interface RolePath {
@@ -97,6 +101,31 @@ const LOCATION_OPTIONS = [
   { value: "onsite", label: "On-site" },
 ] as const;
 
+const APP_STATUS_TABS = [
+  { value: "", label: "All Matches" },
+  { value: "saved", label: "Saved" },
+  { value: "applied", label: "Applied" },
+  { value: "interviewing", label: "Interviewing" },
+] as const;
+
+const APP_STATUS_BADGE_CONFIG: Record<
+  string,
+  { label: string; className: string }
+> = {
+  saved: {
+    label: "Saved",
+    className: "border border-blue-600 text-blue-600 bg-transparent",
+  },
+  applied: {
+    label: "Applied",
+    className: "bg-[#059669] text-white",
+  },
+  interviewing: {
+    label: "Interviewing",
+    className: "bg-[#D97706] text-white",
+  },
+};
+
 const LONG_WAIT_THRESHOLD = 30_000;
 
 // ─── Component ────────────────────────────────────────────────────────
@@ -114,8 +143,16 @@ function JobsFeedContent() {
   const [filterFit, setFilterFit] = useState<string>("");
   const [filterAction, setFilterAction] = useState<string>("");
   const [filterLocation, setFilterLocation] = useState<string>("");
+  const [filterAppStatus, setFilterAppStatus] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("fit");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Tab counts
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({
+    saved: 0,
+    applied: 0,
+    interviewing: 0,
+  });
 
   const [page, setPage] = useState(1);
 
@@ -146,6 +183,28 @@ function JobsFeedContent() {
     fetchPaths();
   }, []);
 
+  // Fetch tab counts for application statuses
+  const fetchTabCounts = useCallback(async () => {
+    try {
+      const counts: Record<string, number> = { saved: 0, applied: 0, interviewing: 0 };
+      const statuses = ["saved", "applied", "interviewing"] as const;
+      await Promise.all(
+        statuses.map(async (status) => {
+          const res = await fetch(
+            `/api/v1/employee/jobs?app_status=${status}&per_page=1&page=1`
+          );
+          if (res.ok) {
+            const json = await res.json();
+            counts[status] = json.pagination?.total ?? 0;
+          }
+        })
+      );
+      setTabCounts(counts);
+    } catch {
+      // Non-critical — counts just won't update
+    }
+  }, []);
+
   // Fetch job matches
   const fetchMatches = useCallback(async () => {
     setLoading(true);
@@ -159,6 +218,7 @@ function JobsFeedContent() {
       if (filterFit) params.set("fit", filterFit);
       if (filterAction) params.set("action", filterAction);
       if (filterLocation) params.set("location", filterLocation);
+      if (filterAppStatus) params.set("app_status", filterAppStatus);
 
       const res = await fetch(`/api/v1/employee/jobs?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch");
@@ -188,11 +248,12 @@ function JobsFeedContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, filterPath, filterFit, filterAction, filterLocation, sortBy]);
+  }, [page, filterPath, filterFit, filterAction, filterLocation, filterAppStatus, sortBy]);
 
   useEffect(() => {
     fetchMatches();
-  }, [fetchMatches]);
+    fetchTabCounts();
+  }, [fetchMatches, fetchTabCounts]);
 
   // Trigger matching
   const handleRunMatching = async () => {
@@ -281,6 +342,34 @@ function JobsFeedContent() {
           )}
         </div>
       )}
+
+      {/* Application status tab bar */}
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto">
+        {APP_STATUS_TABS.map((tab) => {
+          const isActive = filterAppStatus === tab.value;
+          const count = tab.value ? tabCounts[tab.value] : pagination?.total ?? 0;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => {
+                setFilterAppStatus(tab.value);
+                setPage(1);
+              }}
+              className={cn(
+                "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-default",
+                isActive
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-text-secondary hover:bg-gray-200"
+              )}
+            >
+              {tab.label}
+              {typeof count === "number" && (
+                <span className="ml-1.5">({count})</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Filters panel */}
       {showFilters && (
@@ -578,9 +667,30 @@ function JobsFeedContent() {
                         {compConfig.label}
                       </span>
 
-                      <span className="font-medium text-primary">
-                        {actionLabel}
-                      </span>
+                      {match.application_status &&
+                      APP_STATUS_BADGE_CONFIG[match.application_status] ? (
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-medium",
+                            APP_STATUS_BADGE_CONFIG[match.application_status].className
+                          )}
+                        >
+                          {APP_STATUS_BADGE_CONFIG[match.application_status].label}
+                          {match.application_status === "applied" && " \u2713"}
+                          {match.application_status === "applied" && match.applied_at && (
+                            <span className="ml-1 font-normal opacity-80">
+                              {new Date(match.applied_at).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-primary">
+                          {actionLabel}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
