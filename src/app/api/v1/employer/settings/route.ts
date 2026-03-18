@@ -23,10 +23,6 @@ const patchSchema = z.object({
     .min(1, "Company name is required")
     .max(200, "Company name is too long")
     .optional(),
-  industry: z
-    .string()
-    .max(200, "Industry is too long")
-    .optional(),
   full_name: z
     .string()
     .min(1, "Full name is required")
@@ -56,7 +52,7 @@ export async function GET(request: NextRequest) {
     const [companyResult, adminResult] = await Promise.all([
       supabase
         .from("companies")
-        .select("name, logo_url, industry")
+        .select("name, logo_url")
         .eq("id", auth.companyId)
         .single(),
       supabase
@@ -75,7 +71,6 @@ export async function GET(request: NextRequest) {
         company: {
           name: companyResult.data.name,
           logo_url: companyResult.data.logo_url ?? null,
-          industry: (companyResult.data as Record<string, unknown>).industry ?? null,
         },
         admin: {
           id: adminResult.data.id,
@@ -119,19 +114,18 @@ export async function PATCH(request: NextRequest) {
     });
   }
 
-  const { company_name, industry, full_name } = parsed.data;
+  const { company_name, full_name } = parsed.data;
 
   try {
     const supabase = createServiceClient();
     const updates: PromiseLike<unknown>[] = [];
 
     // Update company fields
-    if (company_name !== undefined || industry !== undefined) {
+    if (company_name !== undefined) {
       const companyUpdate: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
+        name: company_name,
       };
-      if (company_name !== undefined) companyUpdate.name = company_name;
-      if (industry !== undefined) companyUpdate.industry = industry;
 
       updates.push(
         supabase

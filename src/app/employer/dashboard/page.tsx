@@ -189,14 +189,12 @@ function DashboardContent() {
   // Fetch dashboard data
   const fetchData = useCallback(async () => {
     try {
-      // Get program ID first
+      // Get program ID (optional — dashboard works without one)
       const programRes = await fetch("/api/v1/employer/program/active");
-      if (!programRes.ok) {
-        setError("No active program found. Create a program first.");
-        return;
+      if (programRes.ok) {
+        const programData = await programRes.json();
+        setProgramId(programData.data.id);
       }
-      const programData = await programRes.json();
-      setProgramId(programData.data.id);
 
       const res = await fetch("/api/v1/employer/dashboard");
       if (!res.ok) {
