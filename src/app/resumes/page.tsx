@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EmployeeRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,13 @@ import {
   AlertCircle,
   Check,
   ChevronDown,
+  ChevronUp,
   Download,
   Edit3,
   FileText,
   Lightbulb,
   RefreshCw,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -86,6 +88,24 @@ interface ResumeData {
 
 type Tone = "professional" | "confident" | "conversational";
 
+interface KitSuggestion {
+  kit_id: string;
+  job_match_id: string;
+  job_title: string;
+  company_name: string;
+  resume_edits: unknown;
+}
+
+interface SuggestionItem {
+  kit_id: string;
+  job_title: string;
+  company_name: string;
+  text: string;
+  index: number;
+  dismissed: boolean;
+  applied: boolean;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────
 
 const CONTEXTUAL_MESSAGES = [
@@ -137,7 +157,9 @@ export default function ResumesPage() {
   return (
     <EmployeeRoute>
       <DashboardLayout>
-        <ResumeWorkspace />
+        <Suspense fallback={null}>
+          <ResumeWorkspace />
+        </Suspense>
       </DashboardLayout>
     </EmployeeRoute>
   );
@@ -145,12 +167,15 @@ export default function ResumesPage() {
 
 function ResumeWorkspace() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const kitIdParam = searchParams.get("kit_id");
   const [resumes, setResumes] = useState<ResumeData[]>([]);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [rescoring, setRescoring] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState<"pdf" | "docx" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +185,12 @@ function ResumeWorkspace() {
   const [editValue, setEditValue] = useState("");
   const editRef = useRef<HTMLTextAreaElement>(null);
   const hasFetched = useRef(false);
+
+  // ─── Suggestions state ──────────────────────────────────────────────
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
+  const [activeKitFilter, setActiveKitFilter] = useState<string | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // ─── Fetch resumes on mount ───────────────────────────────────────
 
@@ -292,6 +323,143 @@ function ResumeWorkspace() {
       msgTimers.forEach(clearTimeout);
     };
   }, [fetchResumes, generateResume]);
+
+  // ─── Fetch suggestions when resumes are loaded ─────────────────────
+
+  useEffect(() => {
+    if (resumes.length === 0) return;
+
+    const currentResume = resumes[activeTab];
+    if (!currentResume?.role_path_id) return;
+
+    async function fetchSuggestions() {
+      try {
+        const res = await fetch(
+          `/api/v1/employee/resume/suggestions?role_path_id=${currentResume.role_path_id}`
+        );
+        if (!res.ok) return;
+
+        const body = await res.json();
+        const kitSuggestions: KitSuggestion[] = body.data ?? [];
+
+        const items: SuggestionItem[] = [];
+        for (const kit of kitSuggestions) {
+          const edits = kit.resume_edits;
+          if (Array.isArray(edits)) {
+            edits.forEach((edit: unknown, idx: number) => {
+              const text =
+                typeof edit === "string"
+                  ? edit
+                  : typeof edit === "object" && edit !== null && "suggestion" in edit
+                    ? String((edit as Record<string, unknown>).suggestion)
+                    : JSON.stringify(edit);
+              items.push({
+                kit_id: kit.kit_id,
+                job_title: kit.job_title,
+                company_name: kit.company_name,
+                text,
+                index: idx,
+                dismissed: false,
+                applied: false,
+              });
+            });
+          }
+        }
+
+        setSuggestions(items);
+
+        // Auto-expand if kit_id param is present
+        if (kitIdParam) {
+          setActiveKitFilter(kitIdParam);
+          setSuggestionsExpanded(true);
+          setTimeout(() => {
+            suggestionsRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }, 100);
+        }
+      } catch {
+        // Suggestions are non-critical — silently fail
+      }
+    }
+
+    fetchSuggestions();
+  }, [resumes, activeTab, kitIdParam]);
+
+  // ─── Re-score resume ────────────────────────────────────────────────
+
+  const handleRescore = useCallback(async () => {
+    const resume = resumes[activeTab];
+    if (!resume || rescoring) return;
+
+    setRescoring(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/v1/employee/resume/${resume.resume_id}/regenerate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tone: resume.tone }),
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error?.message ?? "Re-scoring failed");
+      }
+
+      const result = await res.json();
+
+      setResumes((prev) =>
+        prev.map((r, i) =>
+          i === activeTab
+            ? {
+                ...r,
+                resume_id: result.resume_id,
+                version: result.version,
+                summary_statement: result.summary_statement,
+                skills_section: result.skills_section ?? [],
+                experience_section: result.experience_section ?? [],
+                keywords: result.keywords ?? [],
+                full_content: result.full_content ?? null,
+                scores: result.scores ?? r.scores,
+              }
+            : r
+        )
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to re-score resume"
+      );
+    } finally {
+      setRescoring(false);
+    }
+  }, [resumes, activeTab, rescoring]);
+
+  // ─── Suggestion actions ─────────────────────────────────────────────
+
+  const dismissSuggestion = useCallback((kitId: string, index: number) => {
+    setSuggestions((prev) =>
+      prev.map((s) =>
+        s.kit_id === kitId && s.index === index
+          ? { ...s, dismissed: true }
+          : s
+      )
+    );
+  }, []);
+
+  const applySuggestion = useCallback((kitId: string, index: number) => {
+    setSuggestions((prev) =>
+      prev.map((s) =>
+        s.kit_id === kitId && s.index === index
+          ? { ...s, applied: true }
+          : s
+      )
+    );
+  }, []);
 
   // ─── Tone change → regenerate ─────────────────────────────────────
 
@@ -664,6 +832,18 @@ function ResumeWorkspace() {
           ))}
         </div>
 
+        {/* ─── Job-Specific Suggestions ─── */}
+        <SuggestionsPanel
+          suggestions={suggestions}
+          expanded={suggestionsExpanded}
+          onToggleExpanded={() => setSuggestionsExpanded((p) => !p)}
+          activeKitFilter={activeKitFilter}
+          onFilterChange={setActiveKitFilter}
+          onApply={applySuggestion}
+          onDismiss={dismissSuggestion}
+          containerRef={suggestionsRef}
+        />
+
         {/* Content: Preview + Editing panel */}
         {currentResume && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -909,9 +1089,35 @@ function ResumeWorkspace() {
             <div className="space-y-4">
               {/* Quality Scores */}
               <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
-                <h3 className="text-sm font-semibold text-text-primary">
-                  Quality Scores
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    Quality Scores
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRescore}
+                    disabled={rescoring}
+                    className="text-xs"
+                  >
+                    {rescoring ? (
+                      <span className="flex items-center gap-1.5">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Scoring...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <RefreshCw className="h-3 w-3" />
+                        Re-score Resume
+                      </span>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted">
+                  Role fit score — how well this resume matches{" "}
+                  {currentResume.role_path_title ?? "target role"} positions
+                  generally
+                </p>
 
                 <ScoreGauge
                   label="ATS Strength"
@@ -1180,6 +1386,139 @@ function ResumeSection({
         )}
       </div>
       {children}
+    </div>
+  );
+}
+
+function SuggestionsPanel({
+  suggestions,
+  expanded,
+  onToggleExpanded,
+  activeKitFilter,
+  onFilterChange,
+  onApply,
+  onDismiss,
+  containerRef,
+}: {
+  suggestions: SuggestionItem[];
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  activeKitFilter: string | null;
+  onFilterChange: (kitId: string | null) => void;
+  onApply: (kitId: string, index: number) => void;
+  onDismiss: (kitId: string, index: number) => void;
+  containerRef: React.Ref<HTMLDivElement>;
+}) {
+  const pending = suggestions.filter((s) => !s.dismissed && !s.applied);
+  if (pending.length === 0) return null;
+
+  // Group by kit_id to check how many kits have suggestions
+  const kitGroups = new Map<string, SuggestionItem[]>();
+  for (const s of pending) {
+    const existing = kitGroups.get(s.kit_id) ?? [];
+    existing.push(s);
+    kitGroups.set(s.kit_id, existing);
+  }
+
+  const kitCount = kitGroups.size;
+  const filtered = activeKitFilter
+    ? pending.filter((s) => s.kit_id === activeKitFilter)
+    : pending;
+
+  // Derive label for the notification bar
+  const firstPending = pending[0];
+  const notificationText =
+    kitCount === 1
+      ? `${pending.length} suggested edit${pending.length === 1 ? "" : "s"} from your ${firstPending.company_name} ${firstPending.job_title} application kit`
+      : `${pending.length} pending edit${pending.length === 1 ? "" : "s"} from ${kitCount} application kits`;
+
+  return (
+    <div ref={containerRef} className="space-y-3">
+      {/* Notification bar */}
+      <button
+        type="button"
+        onClick={onToggleExpanded}
+        className="w-full flex items-center gap-3 rounded-lg border border-amber-300/40 bg-amber-50 px-4 py-3 text-left transition-default hover:bg-amber-100/60"
+      >
+        <Sparkles className="h-4 w-4 shrink-0 text-amber-600" />
+        <p className="flex-1 text-sm font-medium text-amber-800">
+          {notificationText}
+        </p>
+        {expanded ? (
+          <ChevronUp className="h-4 w-4 text-amber-600" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-amber-600" />
+        )}
+      </button>
+
+      {/* Collapsible suggestions panel */}
+      {expanded && (
+        <div className="space-y-3 animate-fade-in">
+          {/* Kit filter dropdown (only if multiple kits) */}
+          {kitCount > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-secondary">Filter by:</span>
+              <select
+                value={activeKitFilter ?? ""}
+                onChange={(e) =>
+                  onFilterChange(e.target.value || null)
+                }
+                className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">All kits</option>
+                {Array.from(kitGroups.entries()).map(([kitId, items]) => (
+                  <option key={kitId} value={kitId}>
+                    {items[0].company_name} — {items[0].job_title} ({items.length})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Suggestion cards */}
+          <div className="space-y-2">
+            {filtered.map((suggestion) => (
+              <div
+                key={`${suggestion.kit_id}-${suggestion.index}`}
+                className="rounded-lg border border-amber-200/60 bg-white p-3 space-y-2 transition-default"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 space-y-1">
+                    <p className="text-xs font-medium text-amber-700">
+                      {suggestion.company_name} — {suggestion.job_title}
+                    </p>
+                    <p className="text-sm text-text-primary leading-relaxed">
+                      {suggestion.text}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onApply(suggestion.kit_id, suggestion.index)
+                    }
+                    className="flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-default"
+                  >
+                    <Check className="h-3 w-3" />
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onDismiss(suggestion.kit_id, suggestion.index)
+                    }
+                    className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-background transition-default"
+                  >
+                    <X className="h-3 w-3" />
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
