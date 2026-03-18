@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
   // Get the full role path details for the prompt
   const { data: rawPathDetails } = await supabase
     .from("role_paths")
-    .select("id, title, match_score, is_primary, reasoning")
+    .select("id, title, confidence_score, is_primary, why_it_fits")
     .eq("id", rolePath.id)
     .single();
 

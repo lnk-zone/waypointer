@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   const { data: paths, error: pathError } = await supabase
     .from("role_paths")
     .select(
-      "id, title, category, is_selected, is_primary, match_score, demand_level, salary_band_min, salary_band_max"
+      "id, title, category, is_selected, is_primary, confidence_score, demand_level, salary_band_min, salary_band_max"
     )
     .eq("employee_id", employee.id)
     .order("is_primary", { ascending: false })
