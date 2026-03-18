@@ -61,40 +61,43 @@ const WORK_PREF_OPTIONS = [
 ] as const;
 
 const WORK_AUTH_OPTIONS = [
-  { value: "us_citizen", label: "US Citizen" },
-  { value: "green_card", label: "Green Card" },
-  { value: "h1b", label: "H-1B" },
-  { value: "opt", label: "OPT" },
+  { value: "citizen", label: "Citizen" },
+  { value: "permanent_resident", label: "Permanent Resident" },
+  { value: "work_visa", label: "Work Visa" },
+  { value: "student_visa", label: "Student Visa" },
   { value: "other", label: "Other" },
 ] as const;
 
-const US_STATES = [
-  { value: "AL", label: "Alabama" }, { value: "AK", label: "Alaska" },
-  { value: "AZ", label: "Arizona" }, { value: "AR", label: "Arkansas" },
-  { value: "CA", label: "California" }, { value: "CO", label: "Colorado" },
-  { value: "CT", label: "Connecticut" }, { value: "DE", label: "Delaware" },
-  { value: "FL", label: "Florida" }, { value: "GA", label: "Georgia" },
-  { value: "HI", label: "Hawaii" }, { value: "ID", label: "Idaho" },
-  { value: "IL", label: "Illinois" }, { value: "IN", label: "Indiana" },
-  { value: "IA", label: "Iowa" }, { value: "KS", label: "Kansas" },
-  { value: "KY", label: "Kentucky" }, { value: "LA", label: "Louisiana" },
-  { value: "ME", label: "Maine" }, { value: "MD", label: "Maryland" },
-  { value: "MA", label: "Massachusetts" }, { value: "MI", label: "Michigan" },
-  { value: "MN", label: "Minnesota" }, { value: "MS", label: "Mississippi" },
-  { value: "MO", label: "Missouri" }, { value: "MT", label: "Montana" },
-  { value: "NE", label: "Nebraska" }, { value: "NV", label: "Nevada" },
-  { value: "NH", label: "New Hampshire" }, { value: "NJ", label: "New Jersey" },
-  { value: "NM", label: "New Mexico" }, { value: "NY", label: "New York" },
-  { value: "NC", label: "North Carolina" }, { value: "ND", label: "North Dakota" },
-  { value: "OH", label: "Ohio" }, { value: "OK", label: "Oklahoma" },
-  { value: "OR", label: "Oregon" }, { value: "PA", label: "Pennsylvania" },
-  { value: "RI", label: "Rhode Island" }, { value: "SC", label: "South Carolina" },
-  { value: "SD", label: "South Dakota" }, { value: "TN", label: "Tennessee" },
-  { value: "TX", label: "Texas" }, { value: "UT", label: "Utah" },
-  { value: "VT", label: "Vermont" }, { value: "VA", label: "Virginia" },
-  { value: "WA", label: "Washington" }, { value: "WV", label: "West Virginia" },
-  { value: "WI", label: "Wisconsin" }, { value: "WY", label: "Wyoming" },
-  { value: "DC", label: "District of Columbia" },
+const COUNTRIES = [
+  { value: "US", label: "United States" }, { value: "CA", label: "Canada" },
+  { value: "GB", label: "United Kingdom" }, { value: "AU", label: "Australia" },
+  { value: "DE", label: "Germany" }, { value: "FR", label: "France" },
+  { value: "NL", label: "Netherlands" }, { value: "IE", label: "Ireland" },
+  { value: "SG", label: "Singapore" }, { value: "IN", label: "India" },
+  { value: "NG", label: "Nigeria" }, { value: "GH", label: "Ghana" },
+  { value: "KE", label: "Kenya" }, { value: "ZA", label: "South Africa" },
+  { value: "AE", label: "United Arab Emirates" }, { value: "SA", label: "Saudi Arabia" },
+  { value: "BR", label: "Brazil" }, { value: "MX", label: "Mexico" },
+  { value: "JP", label: "Japan" }, { value: "KR", label: "South Korea" },
+  { value: "CN", label: "China" }, { value: "HK", label: "Hong Kong" },
+  { value: "TW", label: "Taiwan" }, { value: "IL", label: "Israel" },
+  { value: "SE", label: "Sweden" }, { value: "NO", label: "Norway" },
+  { value: "DK", label: "Denmark" }, { value: "FI", label: "Finland" },
+  { value: "CH", label: "Switzerland" }, { value: "AT", label: "Austria" },
+  { value: "BE", label: "Belgium" }, { value: "ES", label: "Spain" },
+  { value: "IT", label: "Italy" }, { value: "PT", label: "Portugal" },
+  { value: "PL", label: "Poland" }, { value: "CZ", label: "Czech Republic" },
+  { value: "NZ", label: "New Zealand" }, { value: "PH", label: "Philippines" },
+  { value: "MY", label: "Malaysia" }, { value: "TH", label: "Thailand" },
+  { value: "VN", label: "Vietnam" }, { value: "ID", label: "Indonesia" },
+  { value: "EG", label: "Egypt" }, { value: "CO", label: "Colombia" },
+  { value: "AR", label: "Argentina" }, { value: "CL", label: "Chile" },
+  { value: "PE", label: "Peru" }, { value: "PK", label: "Pakistan" },
+  { value: "BD", label: "Bangladesh" }, { value: "LK", label: "Sri Lanka" },
+  { value: "RW", label: "Rwanda" }, { value: "TZ", label: "Tanzania" },
+  { value: "UG", label: "Uganda" }, { value: "ET", label: "Ethiopia" },
+  { value: "CM", label: "Cameroon" }, { value: "SN", label: "Senegal" },
+  { value: "CI", label: "Ivory Coast" }, { value: "ML", label: "Mali" },
 ] as const;
 
 const COMP_MIN = 30000;
@@ -113,6 +116,7 @@ type FormState = {
   seniority: ProfileInput["seniority"] | "";
   management_exp: ProfileInput["management_exp"] | "";
   level_dir: ProfileInput["level_dir"] | "";
+  location_country: string;
   location_city: string;
   location_state: string;
   work_pref: ProfileInput["work_pref"] | "";
@@ -136,6 +140,7 @@ function ImportContent() {
     seniority: "",
     management_exp: "",
     level_dir: "",
+    location_country: "",
     location_city: "",
     location_state: "",
     work_pref: "",
@@ -211,8 +216,8 @@ function ImportContent() {
       form.seniority !== "" &&
       form.management_exp !== "" &&
       form.level_dir !== "" &&
+      form.location_country !== "" &&
       form.location_city.trim() !== "" &&
-      form.location_state !== "" &&
       form.work_pref !== "" &&
       form.work_auth !== ""
     );
@@ -232,8 +237,9 @@ function ImportContent() {
           seniority: form.seniority,
           management_exp: form.management_exp,
           level_dir: form.level_dir,
+          location_country: form.location_country,
           location_city: form.location_city.trim(),
-          location_state: form.location_state,
+          location_state: form.location_state.trim(),
           work_pref: form.work_pref,
           comp_target_min: form.comp_range[0],
           comp_target_max: form.comp_range[1],
@@ -450,30 +456,33 @@ function ImportContent() {
           {/* Location */}
           <fieldset className="space-y-2">
             <Label>Location</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
+            <div className="space-y-3">
+              <Select
+                value={form.location_country}
+                onValueChange={(v) => updateForm("location_country", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {COUNTRIES.map((country) => (
+                    <SelectItem key={country.value} value={country.value}>
+                      {country.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   placeholder="City"
                   value={form.location_city}
                   onChange={(e) => updateForm("location_city", e.target.value)}
                 />
-              </div>
-              <div className="space-y-1">
-                <Select
+                <Input
+                  placeholder="State / Province (optional)"
                   value={form.location_state}
-                  onValueChange={(v) => updateForm("location_state", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="State" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {US_STATES.map((state) => (
-                      <SelectItem key={state.value} value={state.value}>
-                        {state.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => updateForm("location_state", e.target.value)}
+                />
               </div>
             </div>
           </fieldset>

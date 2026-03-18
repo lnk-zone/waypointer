@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   const { data: employee, error: empError } = await supabase
     .from("employee_profiles")
     .select(
-      "id, seniority, management_exp, level_dir, location_city, location_state, work_pref, comp_target_min, comp_target_max, work_auth, years_of_experience, most_recent_role, most_recent_company"
+      "id, seniority, management_exp, level_dir, location_country, location_city, location_state, work_pref, comp_target_min, comp_target_max, work_auth, years_of_experience, most_recent_role, most_recent_company"
     )
     .eq("auth_user_id", auth.user.id)
     .single();
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
     seniority: data.seniority,
     management_exp: data.management_exp,
     level_dir: data.level_dir,
+    location_country: data.location_country,
     location_city: data.location_city,
     location_state: data.location_state,
     work_pref: data.work_pref,
