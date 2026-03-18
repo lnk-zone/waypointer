@@ -57,8 +57,7 @@ type JSearchJob = z.infer<typeof jSearchJobSchema>;
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-const JSEARCH_BASE_URL = "https://jsearch.p.rapidapi.com";
-const JSEARCH_HOST = "jsearch.p.rapidapi.com";
+const JSEARCH_BASE_URL = "https://api.openwebninja.com/jsearch";
 const FETCH_TIMEOUT_MS = 30_000;
 
 // ─── Helper: Normalize JSearch job to JobListing ─────────────────────
@@ -141,7 +140,7 @@ export class JSearchProvider implements JobDataProvider {
     }
 
     if (params.remote) {
-      searchParams.set("remote_jobs_only", "true");
+      searchParams.set("work_from_home", "true");
     }
 
     const controller = new AbortController();
@@ -154,8 +153,7 @@ export class JSearchProvider implements JobDataProvider {
         {
           method: "GET",
           headers: {
-            "x-rapidapi-key": this.apiKey,
-            "x-rapidapi-host": JSEARCH_HOST,
+            "x-api-key": this.apiKey,
           },
           signal: controller.signal,
         }
@@ -202,8 +200,7 @@ export class JSearchProvider implements JobDataProvider {
         {
           method: "GET",
           headers: {
-            "x-rapidapi-key": this.apiKey,
-            "x-rapidapi-host": JSEARCH_HOST,
+            "x-api-key": this.apiKey,
           },
           signal: controller.signal,
         }
