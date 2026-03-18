@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -27,10 +27,76 @@ const NAV_ITEMS = [
   { label: "Progress", href: "/progress", Icon: BarChart3 },
 ] as const;
 
+// ─── Readiness Ring ────────────────────────────────────────────────────
+
+function ReadinessRing({ score, size = 44 }: { score: number; size?: number }) {
+  const strokeWidth = 3;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (score / 100) * circumference;
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#E5E7EB"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#2563EB"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="transition-all duration-500 ease-out"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-xs font-semibold text-text-primary">
+          {score}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sidebar ───────────────────────────────────────────────────────────
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [readinessScore, setReadinessScore] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchReadiness() {
+      try {
+        const res = await fetch("/api/v1/employee/progress");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && typeof json?.data?.readiness_score === "number") {
+          setReadinessScore(json.data.readiness_score);
+        }
+      } catch {
+        // Silently fail — show 0%
+      }
+    }
+
+    fetchReadiness();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -60,6 +126,21 @@ export function Sidebar() {
           <WaypointerLogo size={28} variant="mark" />
         </span>
       </div>
+
+      {/* Readiness Score */}
+      <Link
+        href="/progress"
+        className={cn(
+          "flex flex-col items-center py-3 border-b border-border",
+          "hover:scale-105 transition-transform duration-200 ease-out",
+          "lg:flex-row lg:gap-3 lg:px-6"
+        )}
+      >
+        <ReadinessRing score={readinessScore} />
+        <span className="hidden lg:block text-xs font-medium text-text-secondary mt-0 lg:mt-0">
+          Readiness
+        </span>
+      </Link>
 
       {/* Nav items */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 lg:px-3 space-y-1">

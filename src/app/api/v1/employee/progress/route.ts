@@ -343,6 +343,22 @@ export async function GET(request: NextRequest) {
       },
     ];
 
+    // Composite readiness score
+    const weights = {
+      resumes: 25,
+      linkedin: 15,
+      jobs_applied: 20,
+      interviews: 20,
+      outreach: 20,
+    };
+
+    let readinessScore = 0;
+    if (resumesCompleted > 0) readinessScore += weights.resumes;
+    if (linkedinUpdated) readinessScore += weights.linkedin;
+    if (applicationsTracked > 0) readinessScore += weights.jobs_applied;
+    if (interviewsPracticed > 0) readinessScore += weights.interviews;
+    if (outreachSent > 0) readinessScore += weights.outreach;
+
     return NextResponse.json({
       data: {
         current_week: currentWeek,
@@ -356,6 +372,7 @@ export async function GET(request: NextRequest) {
         weekly_activity: weeklyActivity,
         milestones,
         confidence_history: confidenceHistory,
+        readiness_score: readinessScore,
       },
     });
   } catch {
