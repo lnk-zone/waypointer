@@ -109,7 +109,7 @@ function InterviewsContent() {
           if (Array.isArray(pathList)) {
             const selected = pathList.filter(
               (p: RolePath & { is_selected?: boolean }) =>
-                p.is_selected !== false
+                p.is_selected === true
             );
             const mapped = selected.map((p: RolePath) => ({
               id: p.id,
@@ -120,6 +120,8 @@ function InterviewsContent() {
             const primary = mapped.find((p: RolePath) => p.is_primary);
             if (primary) setSelectedPathId(primary.id);
           }
+        } else {
+          console.error(`[interviews] Paths API returned ${pathsRes.status}`);
         }
 
         // Fetch saved jobs (applied or saved)

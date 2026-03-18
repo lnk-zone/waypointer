@@ -124,35 +124,45 @@ function OutreachContent() {
   );
   const [markSentErrorId, setMarkSentErrorId] = useState<string | null>(null);
 
-  // Fetch role paths
+  // Fetch role paths with retry
   useEffect(() => {
-    async function fetchPaths() {
+    let cancelled = false;
+    async function fetchPaths(attempt = 1) {
       try {
         const res = await fetch("/api/v1/employee/paths");
-        if (res.ok) {
-          const json = await res.json();
-          const pathList = json.data ?? json;
-          if (Array.isArray(pathList)) {
-            const selected = pathList.filter(
-              (p: RolePath & { is_selected?: boolean }) =>
-                p.is_selected !== false
-            );
-            setPaths(
-              selected.map((p: RolePath) => ({
-                id: p.id,
-                title: p.title,
-                is_primary: p.is_primary,
-              }))
-            );
-            const primary = selected.find((p: RolePath) => p.is_primary);
-            if (primary) setRolePathId(primary.id);
+        if (!res.ok) {
+          console.error(`[outreach] Paths API returned ${res.status}`);
+          if (attempt < 3 && !cancelled) {
+            setTimeout(() => fetchPaths(attempt + 1), 1000 * attempt);
           }
+          return;
+        }
+        const json = await res.json();
+        const pathList = json.data ?? json;
+        if (Array.isArray(pathList) && !cancelled) {
+          const selected = pathList.filter(
+            (p: RolePath & { is_selected?: boolean }) =>
+              p.is_selected === true
+          );
+          setPaths(
+            selected.map((p: RolePath) => ({
+              id: p.id,
+              title: p.title,
+              is_primary: p.is_primary,
+            }))
+          );
+          const primary = selected.find((p: RolePath) => p.is_primary);
+          if (primary) setRolePathId(primary.id);
         }
       } catch (err) {
         console.error("[outreach] Failed to fetch paths:", err);
+        if (attempt < 3 && !cancelled) {
+          setTimeout(() => fetchPaths(attempt + 1), 1000 * attempt);
+        }
       }
     }
     fetchPaths();
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch history when tab switches to history
