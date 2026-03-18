@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
   // When filtering by app_status, query from applications table instead
   if (appStatus) {
     // Filter through applications table
-    let appCountQuery = supabase
+    const appCountQuery = supabase
       .from("applications")
       .select("id", { count: "exact", head: true })
       .eq("employee_id", employee.id)
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
     const appTotalPages = Math.ceil(appTotal / perPage);
     const appOffset = (page - 1) * perPage;
 
-    let appDataQuery = supabase
+    const appDataQuery = supabase
       .from("applications")
       .select("id, status, applied_at, job_match_id")
       .eq("employee_id", employee.id)
@@ -305,7 +305,7 @@ export async function GET(request: NextRequest) {
 
   // Fetch application statuses for all returned matches
   const matchIdList = (matches ?? []).map((m) => m.id);
-  let applicationMap = new Map<string, { status: string; applied_at: string | null }>();
+  const applicationMap = new Map<string, { status: string; applied_at: string | null }>();
 
   if (matchIdList.length > 0) {
     const { data: applications } = await supabase
