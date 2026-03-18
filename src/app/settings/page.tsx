@@ -156,7 +156,7 @@ function ProfileSection() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: fullName.trim(),
+          employee_name: fullName.trim(),
           location_city: city.trim() || null,
           location_state: state.trim() || null,
           location_country: country || null,

@@ -17,14 +17,14 @@ export const runtime = "nodejs";
 
 const settingsPatchSchema = z
   .object({
-    full_name: z.string().min(1, "Name is required").max(200).optional(),
+    employee_name: z.string().min(1, "Name is required").max(200).optional(),
     location_city: z.string().max(200).optional(),
     location_state: z.string().max(200).optional(),
     location_country: z.string().max(10).optional(),
   })
   .refine(
     (data) =>
-      data.full_name !== undefined ||
+      data.employee_name !== undefined ||
       data.location_city !== undefined ||
       data.location_state !== undefined ||
       data.location_country !== undefined,
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   const { data: employee, error: empError } = await supabase
     .from("employee_profiles")
-    .select("id, full_name, email, location_city, location_state, location_country")
+    .select("id, seat_id, location_city, location_state, location_country, seats(employee_name, employee_email)")
     .eq("auth_user_id", auth.user.id)
     .single();
 
@@ -54,7 +54,19 @@ export async function GET(request: NextRequest) {
     return apiError(ERROR_CODES.NOT_FOUND, "Employee profile not found");
   }
 
-  return NextResponse.json({ data: employee });
+  const seatsRaw = employee.seats as unknown;
+  const seat = Array.isArray(seatsRaw) ? seatsRaw[0] as { employee_name: string | null; employee_email: string } | undefined : null;
+
+  return NextResponse.json({
+    data: {
+      id: employee.id,
+      full_name: seat?.employee_name ?? "",
+      email: seat?.employee_email ?? auth.user.email ?? "",
+      location_city: employee.location_city ?? "",
+      location_state: employee.location_state ?? "",
+      location_country: employee.location_country ?? "",
+    },
+  });
 }
 
 /**
@@ -86,7 +98,7 @@ export async function PATCH(request: NextRequest) {
 
   const { data: employee, error: empError } = await supabase
     .from("employee_profiles")
-    .select("id")
+    .select("id, seat_id")
     .eq("auth_user_id", auth.user.id)
     .single();
 
@@ -94,30 +106,43 @@ export async function PATCH(request: NextRequest) {
     return apiError(ERROR_CODES.NOT_FOUND, "Employee profile not found");
   }
 
-  const updatePayload: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
+  // Update name on the seats table
+  if (parsed.data.employee_name !== undefined) {
+    const { error: seatError } = await supabase
+      .from("seats")
+      .update({
+        employee_name: parsed.data.employee_name,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", employee.seat_id);
 
-  if (parsed.data.full_name !== undefined) {
-    updatePayload.full_name = parsed.data.full_name;
+    if (seatError) {
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to update name");
+    }
   }
+
+  // Update location on the employee_profiles table
+  const profilePayload: Record<string, unknown> = {};
   if (parsed.data.location_city !== undefined) {
-    updatePayload.location_city = parsed.data.location_city;
+    profilePayload.location_city = parsed.data.location_city;
   }
   if (parsed.data.location_state !== undefined) {
-    updatePayload.location_state = parsed.data.location_state;
+    profilePayload.location_state = parsed.data.location_state;
   }
   if (parsed.data.location_country !== undefined) {
-    updatePayload.location_country = parsed.data.location_country;
+    profilePayload.location_country = parsed.data.location_country;
   }
 
-  const { error: updateError } = await supabase
-    .from("employee_profiles")
-    .update(updatePayload)
-    .eq("id", employee.id);
+  if (Object.keys(profilePayload).length > 0) {
+    profilePayload.updated_at = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from("employee_profiles")
+      .update(profilePayload)
+      .eq("id", employee.id);
 
-  if (updateError) {
-    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to update settings");
+    if (updateError) {
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to update settings");
+    }
   }
 
   return NextResponse.json({ data: { updated: true } });
