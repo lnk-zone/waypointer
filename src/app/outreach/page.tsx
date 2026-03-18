@@ -10,11 +10,13 @@ import {
   ChevronDown,
   ClipboardCopy,
   Clock,
+  ExternalLink,
   History,
   Info,
   MessageSquare,
   Send,
   Sparkles,
+  User,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -53,6 +55,8 @@ interface OutreachHistoryItem {
   is_sent: boolean;
   sent_at: string | null;
   created_at: string;
+  contact_name: string | null;
+  contact_linkedin_url: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -103,6 +107,8 @@ function OutreachContent() {
   const [relationship, setRelationship] = useState<string>("cold");
   const [personalContext, setPersonalContext] = useState<string>("");
   const [tone, setTone] = useState<string>("warm");
+  const [contactName, setContactName] = useState<string>("");
+  const [contactLinkedinUrl, setContactLinkedinUrl] = useState<string>("");
 
   // Generation state
   const [generating, setGenerating] = useState(false);
@@ -220,6 +226,8 @@ function OutreachContent() {
             relationship,
             personal_context: personalContext,
             tone: toneOverride ?? tone,
+            contact_name: contactName.trim() || undefined,
+            contact_linkedin_url: contactLinkedinUrl.trim() || undefined,
           }),
         });
 
@@ -242,7 +250,7 @@ function OutreachContent() {
         setGenerating(false);
       }
     },
-    [recipient, rolePathId, companyContext, relationship, personalContext, tone]
+    [recipient, rolePathId, companyContext, relationship, personalContext, tone, contactName, contactLinkedinUrl]
   );
 
   // Regenerate with new tone (auto-regenerate if a result already exists)
@@ -514,6 +522,48 @@ function OutreachContent() {
                       placeholder='e.g., "We met at SaaStr 2024"'
                       rows={2}
                       className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  {/* Contact Name */}
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">
+                      Contact Name{" "}
+                      <span className="text-text-secondary/60">
+                        (optional)
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={contactName}
+                      onChange={(e) => {
+                        setContactName(e.target.value);
+                        setResult(null);
+                        setSentConfirmed(false);
+                      }}
+                      placeholder="e.g., Sarah Chen"
+                      className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Contact LinkedIn URL */}
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">
+                      LinkedIn Profile URL{" "}
+                      <span className="text-text-secondary/60">
+                        (optional)
+                      </span>
+                    </label>
+                    <input
+                      type="url"
+                      value={contactLinkedinUrl}
+                      onChange={(e) => {
+                        setContactLinkedinUrl(e.target.value);
+                        setResult(null);
+                        setSentConfirmed(false);
+                      }}
+                      placeholder="e.g., linkedin.com/in/sarahchen"
+                      className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
                     />
                   </div>
 
@@ -932,6 +982,12 @@ function HistoryCard({
           <div className="min-w-0">
             <p className="text-sm font-medium text-text-primary truncate">
               {RECIPIENT_LABELS[item.recipient] ?? item.recipient}
+              {item.contact_name && (
+                <span className="text-text-secondary font-normal">
+                  {" "}
+                  — {item.contact_name}
+                </span>
+              )}
               {item.role_path_title && (
                 <span className="text-text-secondary font-normal">
                   {" "}
@@ -970,6 +1026,34 @@ function HistoryCard({
               {item.tone} tone
             </span>
           </div>
+
+          {/* Contact info */}
+          {(item.contact_name || item.contact_linkedin_url) && (
+            <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
+              {item.contact_name && (
+                <span className="inline-flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-text-secondary" />
+                  {item.contact_name}
+                </span>
+              )}
+              {item.contact_linkedin_url && (
+                <a
+                  href={
+                    item.contact_linkedin_url.startsWith("http")
+                      ? item.contact_linkedin_url
+                      : `https://${item.contact_linkedin_url}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  LinkedIn Profile
+                </a>
+              )}
+            </div>
+          )}
 
           {/* Messages */}
           {item.linkedin_message && (

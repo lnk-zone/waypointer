@@ -51,6 +51,8 @@ const generateRequestSchema = z.object({
   relationship: z.enum(RELATIONSHIP_STRENGTHS),
   personal_context: z.string().optional(),
   tone: z.enum(TONES).optional(),
+  contact_name: z.string().max(200).optional(),
+  contact_linkedin_url: z.string().url().optional().or(z.literal("")),
 });
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -170,6 +172,7 @@ export async function POST(request: NextRequest) {
     relationship_strength: input.relationship,
     personal_context: input.personal_context ?? "None provided",
     tone: input.tone ?? "warm",
+    contact_name: input.contact_name ?? "Not specified",
   };
 
   // Call AI pipeline
@@ -205,6 +208,11 @@ export async function POST(request: NextRequest) {
       email_message: aiResult.email_message,
       followup_message: aiResult.followup_message,
       guidance: aiResult.guidance,
+      contact_name: input.contact_name ?? null,
+      contact_linkedin_url:
+        input.contact_linkedin_url && input.contact_linkedin_url.length > 0
+          ? input.contact_linkedin_url
+          : null,
     })
     .select("*")
     .single();

@@ -13,7 +13,10 @@ import {
   Building2,
   ChevronDown,
   Filter,
+  Link2,
+  Loader2,
   MapPin,
+  Plus,
   RefreshCw,
   Search,
   X,
@@ -155,6 +158,75 @@ function JobsFeedContent() {
   });
 
   const [page, setPage] = useState(1);
+
+  // External job modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [extTitle, setExtTitle] = useState("");
+  const [extCompany, setExtCompany] = useState("");
+  const [extUrl, setExtUrl] = useState("");
+  const [extLocation, setExtLocation] = useState("");
+  const [extNotes, setExtNotes] = useState("");
+  const [extApplied, setExtApplied] = useState(false);
+  const [extSubmitting, setExtSubmitting] = useState(false);
+  const [extError, setExtError] = useState<string | null>(null);
+
+  const resetExtForm = () => {
+    setExtTitle("");
+    setExtCompany("");
+    setExtUrl("");
+    setExtLocation("");
+    setExtNotes("");
+    setExtApplied(false);
+    setExtError(null);
+  };
+
+  const handleAddExternal = async () => {
+    if (!extTitle.trim()) {
+      setExtError("Job title is required.");
+      return;
+    }
+    if (!extCompany.trim()) {
+      setExtError("Company name is required.");
+      return;
+    }
+
+    setExtSubmitting(true);
+    setExtError(null);
+
+    try {
+      const res = await fetch("/api/v1/employee/jobs/external", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: extTitle.trim(),
+          company_name: extCompany.trim(),
+          url: extUrl.trim() || undefined,
+          location: extLocation.trim() || undefined,
+          notes: extNotes.trim() || undefined,
+          already_applied: extApplied,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(
+          errJson?.error?.message ?? "Failed to add external job"
+        );
+      }
+
+      // Success — close modal, refresh list
+      setShowAddModal(false);
+      resetExtForm();
+      await fetchMatches();
+      await fetchTabCounts();
+    } catch (err) {
+      setExtError(
+        err instanceof Error ? err.message : "Failed to add external job"
+      );
+    } finally {
+      setExtSubmitting(false);
+    }
+  };
 
   // Fetch role paths for filter dropdown
   useEffect(() => {
@@ -312,6 +384,15 @@ function JobsFeedContent() {
                 {[filterPath, filterFit, filterAction, filterLocation].filter(Boolean).length}
               </span>
             )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddModal(true)}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Track External Job
           </Button>
           <Button
             onClick={handleRunMatching}
@@ -731,6 +812,170 @@ function JobsFeedContent() {
             >
               Next
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Add External Job Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 transition-default"
+            onClick={() => {
+              if (!extSubmitting) {
+                setShowAddModal(false);
+                resetExtForm();
+              }
+            }}
+          />
+          {/* Modal */}
+          <div className="relative z-10 w-full max-w-md mx-4 rounded-lg border border-border bg-surface shadow-xl">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-text-primary">
+                  Track External Job
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  if (!extSubmitting) {
+                    setShowAddModal(false);
+                    resetExtForm();
+                  }
+                }}
+                className="text-text-secondary hover:text-text-primary transition-default"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {extError && (
+                <div className="rounded-md border border-[#DC2626]/20 bg-[#DC2626]/5 p-3">
+                  <p className="text-sm text-[#DC2626]">{extError}</p>
+                </div>
+              )}
+
+              {/* Job Title */}
+              <div>
+                <label className="text-xs font-medium text-text-secondary mb-1 block">
+                  Job Title <span className="text-[#DC2626]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={extTitle}
+                  onChange={(e) => setExtTitle(e.target.value)}
+                  placeholder="e.g., Senior Product Manager"
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* Company Name */}
+              <div>
+                <label className="text-xs font-medium text-text-secondary mb-1 block">
+                  Company Name <span className="text-[#DC2626]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={extCompany}
+                  onChange={(e) => setExtCompany(e.target.value)}
+                  placeholder="e.g., Stripe"
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* Job URL */}
+              <div>
+                <label className="text-xs font-medium text-text-secondary mb-1 block">
+                  Job URL{" "}
+                  <span className="text-text-secondary/60">(optional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={extUrl}
+                  onChange={(e) => setExtUrl(e.target.value)}
+                  placeholder="e.g., https://jobs.lever.co/stripe/..."
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="text-xs font-medium text-text-secondary mb-1 block">
+                  Location{" "}
+                  <span className="text-text-secondary/60">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={extLocation}
+                  onChange={(e) => setExtLocation(e.target.value)}
+                  placeholder="e.g., San Francisco, CA (Remote)"
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-medium text-text-secondary mb-1 block">
+                  Notes{" "}
+                  <span className="text-text-secondary/60">(optional)</span>
+                </label>
+                <textarea
+                  value={extNotes}
+                  onChange={(e) => setExtNotes(e.target.value)}
+                  placeholder="Any notes about this job..."
+                  rows={2}
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none resize-none"
+                />
+              </div>
+
+              {/* Already applied checkbox */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={extApplied}
+                  onChange={(e) => setExtApplied(e.target.checked)}
+                  className="accent-primary h-4 w-4"
+                />
+                <span className="text-sm text-text-primary">
+                  I have already applied to this job
+                </span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetExtForm();
+                }}
+                disabled={extSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAddExternal}
+                disabled={extSubmitting || !extTitle.trim() || !extCompany.trim()}
+                className="gap-2"
+              >
+                {extSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Add Job
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       )}

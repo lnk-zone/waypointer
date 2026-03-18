@@ -35,6 +35,8 @@ interface OutreachRow {
   is_sent: boolean;
   sent_at: string | null;
   created_at: string;
+  contact_name: string | null;
+  contact_linkedin_url: string | null;
   role_paths: { title: string } | null;
 }
 
@@ -107,7 +109,7 @@ export async function GET(request: NextRequest) {
   const { data: rawMessages, error: fetchError } = await supabase
     .from("outreach_messages")
     .select(
-      "id, recipient, role_path_id, job_match_id, relationship, tone, linkedin_message, email_message, followup_message, guidance, is_sent, sent_at, created_at, role_paths(title)"
+      "id, recipient, role_path_id, job_match_id, relationship, tone, linkedin_message, email_message, followup_message, guidance, is_sent, sent_at, created_at, contact_name, contact_linkedin_url, role_paths(title)"
     )
     .eq("employee_id", employee.id)
     .order("created_at", { ascending: false })
@@ -135,6 +137,8 @@ export async function GET(request: NextRequest) {
     is_sent: m.is_sent,
     sent_at: m.sent_at,
     created_at: m.created_at,
+    contact_name: m.contact_name,
+    contact_linkedin_url: m.contact_linkedin_url,
   }));
 
   const totalPages = Math.ceil(total / perPage);
