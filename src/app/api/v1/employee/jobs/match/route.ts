@@ -76,13 +76,15 @@ export async function POST(request: NextRequest) {
     .join(", ");
 
   // Build search params for each role path
+  // Use the path title (e.g. "Senior Data Analyst at Financial Services companies")
+  // as the primary search query — JSearch works best with natural job title queries,
+  // not lists of skills/tools.
   const searches: JobSearchParams[] = rolePaths.map((path) => {
-    const keywords = (path.core_keywords as string[]) ?? [];
-    // Use path title as primary keyword if no core_keywords
-    const searchKeywords =
-      keywords.length > 0 ? keywords.slice(0, 3) : [path.title];
+    // Extract the job title portion before "at" if present, otherwise use full title
+    const titleParts = path.title.split(" at ");
+    const jobTitle = titleParts[0].trim();
     return {
-      keywords: searchKeywords,
+      keywords: [jobTitle],
       location: location || "United States",
       remote: employee.work_pref === "remote",
       page: 1,
