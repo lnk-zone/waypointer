@@ -42,12 +42,17 @@ interface SavedJob {
   company_name: string;
 }
 
+interface PrepQuestion {
+  question: string;
+  suggested_answer: string;
+}
+
 interface PrepData {
   role_path: { id: string; title: string };
   company_context?: { company_name: string; job_title: string };
-  common_questions: string[];
-  behavioral_questions: string[];
-  company_specific: string[];
+  common_questions: PrepQuestion[] | string[];
+  behavioral_questions: PrepQuestion[] | string[];
+  company_specific: PrepQuestion[] | string[];
   strengths_to_emphasize: string[];
   weak_spots_to_prepare: string[];
   compensation_prep: string;
@@ -781,17 +786,53 @@ function PrepSection({
   );
 }
 
-function QuestionList({ items }: { items: string[] }) {
+function QuestionList({ items }: { items: PrepQuestion[] | string[] }) {
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
   return (
     <ol className="space-y-3">
-      {items.map((q, i) => (
-        <li key={i} className="flex gap-3">
-          <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center mt-0.5">
-            {i + 1}
-          </span>
-          <p className="text-sm text-text-primary leading-relaxed">{q}</p>
-        </li>
-      ))}
+      {items.map((item, i) => {
+        const isObject = typeof item === "object" && item !== null;
+        const question = isObject ? (item as PrepQuestion).question : (item as string);
+        const answer = isObject ? (item as PrepQuestion).suggested_answer : null;
+        const isExpanded = expandedIndex === i;
+
+        return (
+          <li key={i} className="border border-border rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => answer && setExpandedIndex(isExpanded ? null : i)}
+              className={cn(
+                "w-full flex gap-3 p-3 text-left transition-colors",
+                answer ? "cursor-pointer hover:bg-gray-50" : "cursor-default"
+              )}
+            >
+              <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center mt-0.5">
+                {i + 1}
+              </span>
+              <span className="flex-1 text-sm text-text-primary leading-relaxed font-medium">
+                {question}
+              </span>
+              {answer && (
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted flex-shrink-0 mt-0.5 transition-transform duration-200",
+                    isExpanded && "rotate-180"
+                  )}
+                />
+              )}
+            </button>
+            {answer && isExpanded && (
+              <div className="px-3 pb-3 pt-0 ml-8 mr-3">
+                <div className="rounded-md bg-blue-50 border border-blue-100 p-3">
+                  <p className="text-xs font-medium text-blue-700 mb-1">Suggested Answer</p>
+                  <p className="text-sm text-blue-900 leading-relaxed">{answer}</p>
+                </div>
+              </div>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }

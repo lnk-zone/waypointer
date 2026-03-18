@@ -316,10 +316,15 @@ export type GenerateOutreachOutput = z.infer<typeof generateOutreachSchema>;
 
 // ─── GENERATE_INTERVIEW_PREP (PR Prompt 14) ─────────────────────────
 
+const interviewQuestionSchema = z.object({
+  question: z.string().min(1),
+  suggested_answer: z.string().min(1),
+});
+
 export const generateInterviewPrepSchema = z.object({
-  common_questions: z.array(z.string().min(1)).min(5).max(8),
-  behavioral_questions: z.array(z.string().min(1)).min(5).max(8),
-  company_specific: z.array(z.string()).max(5),
+  common_questions: z.array(interviewQuestionSchema).min(5).max(8),
+  behavioral_questions: z.array(interviewQuestionSchema).min(5).max(8),
+  company_specific: z.array(interviewQuestionSchema).max(5),
   strengths_to_emphasize: z.array(z.string().min(1)).min(3).max(5),
   weak_spots_to_prepare: z.array(z.string().min(1)).min(2).max(3),
   compensation_prep: z.string().min(1),

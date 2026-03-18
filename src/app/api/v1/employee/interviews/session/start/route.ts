@@ -129,6 +129,49 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Fetch prep questions so the mock interview asks the SAME questions
+  let prepQuestionsText = "";
+  {
+    let prepQuery = supabase
+      .from("interview_prep")
+      .select("content")
+      .eq("employee_id", employee.id)
+      .eq("role_path_id", input.role_path_id);
+
+    if (input.job_match_id) {
+      prepQuery = prepQuery.eq("job_match_id", input.job_match_id);
+    } else {
+      prepQuery = prepQuery.is("job_match_id", null);
+    }
+
+    const { data: prepCache } = await prepQuery.single();
+
+    if (prepCache) {
+      const content = prepCache.content as Record<string, unknown>;
+      const extractQuestions = (items: unknown[]): string[] =>
+        items.map((item) =>
+          typeof item === "object" && item !== null && "question" in item
+            ? (item as { question: string }).question
+            : String(item)
+        );
+
+      const allQuestions: string[] = [];
+      if (Array.isArray(content.behavioral_questions)) {
+        allQuestions.push(...extractQuestions(content.behavioral_questions));
+      }
+      if (Array.isArray(content.common_questions)) {
+        allQuestions.push(...extractQuestions(content.common_questions));
+      }
+      if (Array.isArray(content.company_specific)) {
+        allQuestions.push(...extractQuestions(content.company_specific));
+      }
+
+      if (allQuestions.length > 0) {
+        prepQuestionsText = allQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n");
+      }
+    }
+  }
+
   // Inject variables into the persona prompt template
   const variables: Record<string, string> = {
     role_path_title: rolePath.title,
@@ -138,6 +181,7 @@ export async function POST(request: NextRequest) {
     company_context: hasCompanyContext ? "true" : "",
     company_name: companyName,
     job_title: jobTitle,
+    prep_questions: prepQuestionsText,
   };
 
   let personaPrompt: string;
