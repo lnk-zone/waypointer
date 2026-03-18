@@ -35,6 +35,10 @@ const patchSchema = z.object({
     .string()
     .max(2000, "Welcome message is too long")
     .optional(),
+  admin_emails: z
+    .array(z.string().email("Invalid email format"))
+    .max(5, "Maximum 5 team member emails")
+    .optional(),
   full_name: z
     .string()
     .min(1, "Full name is required")
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
     const [companyResult, adminResult] = await Promise.all([
       supabase
         .from("companies")
-        .select("name, logo_url, brand_color, support_email, welcome_message")
+        .select("name, logo_url, brand_color, support_email, welcome_message, admin_emails")
         .eq("id", auth.companyId)
         .single(),
       supabase
@@ -95,6 +99,7 @@ export async function GET(request: NextRequest) {
           brand_color: companyResult.data.brand_color ?? "#2563EB",
           support_email: companyResult.data.support_email ?? "",
           welcome_message: companyResult.data.welcome_message ?? "",
+          admin_emails: (companyResult.data.admin_emails as string[]) ?? [],
         },
         admin: {
           id: adminResult.data.id,
@@ -138,7 +143,7 @@ export async function PATCH(request: NextRequest) {
     });
   }
 
-  const { company_name, brand_color, support_email, welcome_message, full_name } = parsed.data;
+  const { company_name, brand_color, support_email, welcome_message, admin_emails, full_name } = parsed.data;
 
   try {
     const supabase = createServiceClient();
@@ -150,6 +155,7 @@ export async function PATCH(request: NextRequest) {
     if (brand_color !== undefined) companyUpdate.brand_color = brand_color;
     if (support_email !== undefined) companyUpdate.support_email = support_email;
     if (welcome_message !== undefined) companyUpdate.welcome_message = welcome_message;
+    if (admin_emails !== undefined) companyUpdate.admin_emails = admin_emails;
 
     if (Object.keys(companyUpdate).length > 0) {
       companyUpdate.updated_at = new Date().toISOString();

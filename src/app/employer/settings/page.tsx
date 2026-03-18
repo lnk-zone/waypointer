@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Loader2, Lock, Bell, User, Palette } from "lucide-react";
+import { Building2, Loader2, Lock, Bell, User, Palette, Users, Plus, X } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ interface SettingsData {
     brand_color: string;
     support_email: string;
     welcome_message: string;
+    admin_emails: string[];
   };
   admin: {
     id: string;
@@ -105,6 +106,12 @@ function EmployerSettingsPage() {
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [savingCompany, setSavingCompany] = useState(false);
 
+  // Team member emails state
+  const [teamEmails, setTeamEmails] = useState<string[]>([]);
+  const [newTeamEmail, setNewTeamEmail] = useState("");
+  const [teamEmailError, setTeamEmailError] = useState<string | null>(null);
+  const [savingTeam, setSavingTeam] = useState(false);
+
   // Admin form state
   const [fullName, setFullName] = useState("");
   const [savingAdmin, setSavingAdmin] = useState(false);
@@ -137,6 +144,7 @@ function EmployerSettingsPage() {
       setBrandColor(data.company.brand_color ?? "#2563EB");
       setSupportEmail(data.company.support_email ?? "");
       setWelcomeMessage(data.company.welcome_message ?? "");
+      setTeamEmails(data.company.admin_emails ?? []);
       setFullName(data.admin.full_name ?? "");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load settings";
@@ -180,6 +188,53 @@ function EmployerSettingsPage() {
       toast.error({ title: message });
     } finally {
       setSavingCompany(false);
+    }
+  }
+
+  // ─── Team Member Emails ─────────────────────────────────────────
+
+  function handleAddTeamEmail() {
+    setTeamEmailError(null);
+    const email = newTeamEmail.trim().toLowerCase();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setTeamEmailError("Invalid email address");
+      return;
+    }
+    if (teamEmails.includes(email)) {
+      setTeamEmailError("Email already added");
+      return;
+    }
+    if (teamEmails.length >= 5) {
+      setTeamEmailError("Maximum 5 team members");
+      return;
+    }
+    setTeamEmails((prev) => [...prev, email]);
+    setNewTeamEmail("");
+  }
+
+  function handleRemoveTeamEmail(email: string) {
+    setTeamEmails((prev) => prev.filter((e) => e !== email));
+  }
+
+  async function handleSaveTeamEmails() {
+    setSavingTeam(true);
+    try {
+      const res = await fetch("/api/v1/employer/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_emails: teamEmails }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error?.message ?? "Failed to save team members");
+      }
+      toast.success({ title: "Team members updated" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save";
+      toast.error({ title: message });
+    } finally {
+      setSavingTeam(false);
     }
   }
 
@@ -420,7 +475,84 @@ function EmployerSettingsPage() {
         </div>
       </Card>
 
-      {/* ── Section 2: Admin Profile ── */}
+      {/* ── Section 2: Team Members ── */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Users className="h-5 w-5 text-primary" />
+          <h2 className="text-body font-semibold text-text-primary">
+            HR Team Members
+          </h2>
+        </div>
+        <p className="text-caption text-text-secondary mb-4">
+          Add HR team member emails who may need visibility into the transition program.
+        </p>
+        <div className="space-y-3">
+          {teamEmails.map((email) => (
+            <div
+              key={email}
+              className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+            >
+              <span className="text-body-sm text-text-primary">{email}</span>
+              <button
+                type="button"
+                onClick={() => handleRemoveTeamEmail(email)}
+                className="text-muted hover:text-danger transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+
+          {teamEmails.length < 5 && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="email"
+                value={newTeamEmail}
+                onChange={(e) => {
+                  setNewTeamEmail(e.target.value);
+                  setTeamEmailError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddTeamEmail();
+                  }
+                }}
+                placeholder="team-member@company.com"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddTeamEmail}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
+          )}
+
+          {teamEmailError && (
+            <p className="text-caption text-danger">{teamEmailError}</p>
+          )}
+
+          {teamEmails.length === 0 && (
+            <p className="text-caption text-muted">No team members added yet.</p>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button onClick={handleSaveTeamEmails} disabled={savingTeam}>
+              {savingTeam && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Save Team Members
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── Section 3: Admin Profile ── */}
       <Card className="p-6">
         <div className="flex items-center gap-2 mb-4">
           <User className="h-5 w-5 text-primary" />
