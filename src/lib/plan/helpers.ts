@@ -11,6 +11,9 @@ export interface PlanItemStored {
   estimated_minutes: number;
   is_completed: boolean;
   is_deferred: boolean;
+  day?: string;
+  carried_over?: boolean;
+  source?: "ai" | "manual" | "interview_feedback" | "job_kit";
 }
 
 // ─── Week Number ──────────────────────────────────────────────────────

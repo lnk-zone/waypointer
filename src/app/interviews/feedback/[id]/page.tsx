@@ -20,9 +20,11 @@ import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
+  CheckCircle,
   ChevronDown,
   ChevronUp,
   Lightbulb,
+  Loader2,
   MessageCircle,
   RefreshCcw,
   Shield,
@@ -180,6 +182,8 @@ function FeedbackContent() {
   const [error, setError] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
   const [expandedAnswer, setExpandedAnswer] = useState<number | null>(null);
+  const [addingToPlan, setAddingToPlan] = useState(false);
+  const [addedToPlan, setAddedToPlan] = useState(false);
 
   // Fetch session data
   const fetchSession = useCallback(async () => {
@@ -214,6 +218,69 @@ function FeedbackContent() {
       fetchSession();
     }
   }, [sessionId, fetchSession]);
+
+  // Add recommendation to weekly plan
+  const handleAddToPlan = useCallback(async () => {
+    if (!data?.feedback?.next_recommendation) return;
+    setAddingToPlan(true);
+    try {
+      // First, get the current weekly plan
+      const planRes = await fetch("/api/v1/employee/plan/weekly");
+      let planId: string | null = null;
+
+      if (planRes.ok) {
+        const planJson = await planRes.json();
+        if (planJson.data) {
+          planId = planJson.data.id;
+        }
+      }
+
+      // If no plan exists, generate one first
+      if (!planId) {
+        const genRes = await fetch("/api/v1/employee/plan/weekly/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (genRes.ok) {
+          const genJson = await genRes.json();
+          planId = genJson.data.id;
+        }
+      }
+
+      if (!planId) {
+        setAddingToPlan(false);
+        return;
+      }
+
+      // Add the recommendation as a task
+      const addRes = await fetch(
+        `/api/v1/employee/plan/weekly/${planId}/items`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: data.feedback.next_recommendation,
+            category: "interviews",
+            priority: "high",
+            estimated_minutes: 30,
+            source: "interview_feedback",
+          }),
+        }
+      );
+
+      if (addRes.ok) {
+        setAddedToPlan(true);
+        // Navigate to dashboard after a brief delay
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 600);
+      }
+    } catch {
+      // Ignore — user can try again
+    } finally {
+      setAddingToPlan(false);
+    }
+  }, [data, router]);
 
   // Loading state
   if (loading) {
@@ -661,11 +728,18 @@ function FeedbackContent() {
         </Button>
         <Button
           variant="outline"
-          onClick={() => router.push("/progress")}
+          onClick={handleAddToPlan}
+          disabled={addingToPlan || addedToPlan}
           className="gap-2"
         >
-          <Target className="h-4 w-4" />
-          Add to Weekly Plan
+          {addedToPlan ? (
+            <CheckCircle className="h-4 w-4 text-[#059669]" />
+          ) : addingToPlan ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Target className="h-4 w-4" />
+          )}
+          {addedToPlan ? "Added to Plan" : addingToPlan ? "Adding..." : "Add to Weekly Plan"}
         </Button>
       </div>
     </div>

@@ -225,10 +225,22 @@ export async function POST(request: NextRequest) {
 
   // Store the plan — upsert to replace existing plan for this week
   const weekStart = getWeekStartDate();
+  // Build stored items, marking carryover items appropriately
+  const carriedDescriptions = new Set<string>();
+  if (rawLastPlan) {
+    const lastPlan = rawLastPlan as unknown as WeeklyPlanRecord;
+    const items = lastPlan.items ?? [];
+    items
+      .filter((item) => !item.is_completed && !item.is_deferred)
+      .forEach((item) => carriedDescriptions.add(item.description));
+  }
+
   const storedItems: PlanItemStored[] = plan.items.map((item) => ({
     ...item,
     is_completed: false,
     is_deferred: false,
+    carried_over: carriedDescriptions.has(item.description),
+    source: "ai" as const,
   }));
 
   // Check if a plan for this week already exists

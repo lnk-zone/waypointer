@@ -14,6 +14,10 @@ import {
   Linkedin,
   CheckCircle2,
   ArrowRight,
+  Check,
+  RotateCcw,
+  RefreshCcw,
+  Loader2,
 } from "lucide-react";
 import type {
   DailyPlan,
@@ -38,6 +42,27 @@ interface SelectedPath {
   is_primary: boolean;
 }
 
+interface WeeklyPlanItem {
+  description: string;
+  category: string;
+  priority: string;
+  estimated_minutes: number;
+  is_completed: boolean;
+  is_deferred: boolean;
+  day?: string;
+  carried_over?: boolean;
+  source?: "ai" | "manual" | "interview_feedback" | "job_kit";
+}
+
+interface WeeklyPlan {
+  id: string;
+  week_number: number;
+  week_start: string;
+  items: WeeklyPlanItem[];
+  week_focus?: string;
+  encouragement?: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────
 
 const CONTEXTUAL_MESSAGES = [
@@ -52,8 +77,6 @@ const LONG_WAIT_MESSAGE = "Almost there...";
 
 const SKELETON_CLASS =
   "animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]";
-
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const READINESS_AREAS: { key: keyof ReadinessBreakdown; label: string }[] = [
   { key: "resume", label: "Resume" },
@@ -183,6 +206,12 @@ function DashboardContent() {
   const [retrying, setRetrying] = useState(false);
   const [liveReadiness, setLiveReadiness] = useState<{ score: number; breakdown: ReadinessBreakdown } | null>(null);
 
+  // Weekly plan state
+  const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan | null>(null);
+  const [weeklyPlanLoading, setWeeklyPlanLoading] = useState(true);
+  const [weeklyPlanGenerating, setWeeklyPlanGenerating] = useState(false);
+  const [togglingIndex, setTogglingIndex] = useState<number | null>(null);
+
   const generationStarted = useRef(false);
   const messageTimers = useRef<NodeJS.Timeout[]>([]);
   const longWaitTimer = useRef<NodeJS.Timeout | null>(null);
@@ -212,6 +241,95 @@ function DashboardContent() {
       }
     }
     fetchReadiness();
+  }, []);
+
+  // Fetch or auto-generate weekly plan
+  const loadWeeklyPlan = useCallback(async () => {
+    setWeeklyPlanLoading(true);
+    try {
+      const res = await fetch("/api/v1/employee/plan/weekly");
+      if (!res.ok) {
+        setWeeklyPlanLoading(false);
+        return;
+      }
+      const json = await res.json();
+      if (json.data) {
+        setWeeklyPlan(json.data as WeeklyPlan);
+        setWeeklyPlanLoading(false);
+        return;
+      }
+      // No plan exists — auto-generate week 1
+      setWeeklyPlanGenerating(true);
+      const genRes = await fetch("/api/v1/employee/plan/weekly/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (genRes.ok) {
+        const genJson = await genRes.json();
+        setWeeklyPlan(genJson.data as WeeklyPlan);
+      }
+    } catch {
+      // Non-critical — plan section will show empty state
+    } finally {
+      setWeeklyPlanLoading(false);
+      setWeeklyPlanGenerating(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWeeklyPlan();
+  }, [loadWeeklyPlan]);
+
+  // Toggle item completion
+  const toggleItemComplete = useCallback(
+    async (itemIndex: number) => {
+      if (!weeklyPlan) return;
+      setTogglingIndex(itemIndex);
+      const item = weeklyPlan.items[itemIndex];
+      try {
+        const res = await fetch(
+          `/api/v1/employee/plan/weekly/${weeklyPlan.id}/items`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              item_index: itemIndex,
+              is_completed: !item.is_completed,
+            }),
+          }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          setWeeklyPlan((prev) =>
+            prev ? { ...prev, items: json.data.items as WeeklyPlanItem[] } : prev
+          );
+        }
+      } catch {
+        // Ignore — optimistic update not applied
+      } finally {
+        setTogglingIndex(null);
+      }
+    },
+    [weeklyPlan]
+  );
+
+  // Regenerate weekly plan
+  const regenerateWeeklyPlan = useCallback(async () => {
+    setWeeklyPlanGenerating(true);
+    try {
+      const res = await fetch("/api/v1/employee/plan/weekly/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setWeeklyPlan(json.data as WeeklyPlan);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setWeeklyPlanGenerating(false);
+    }
   }, []);
 
   const clearTimers = useCallback(() => {
@@ -469,31 +587,130 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* First 7-Day Plan */}
+        {/* This Week Plan */}
         <div className="lg:col-span-2 rounded-md border border-border bg-surface p-6 space-y-5">
-          <h2 className="text-[15px] font-semibold text-text-primary">
-            Your first 7 days
-          </h2>
-
-          <div className="space-y-4">
-            {plan.first_week_plan.map((day) => (
-              <div key={day.day} className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  {DAY_LABELS[day.day - 1] ?? `D${day.day}`}
-                </div>
-                <div className="flex-1 space-y-1 pt-1">
-                  {day.tasks.map((task, idx) => (
-                    <p
-                      key={idx}
-                      className="text-sm text-text-secondary leading-5"
-                    >
-                      {task}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between">
+            <h2 className="text-[15px] font-semibold text-text-primary">
+              {weeklyPlan ? `This week (Week ${weeklyPlan.week_number})` : "This week"}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-text-secondary hover:text-primary"
+              onClick={regenerateWeeklyPlan}
+              disabled={weeklyPlanGenerating}
+            >
+              {weeklyPlanGenerating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5" />
+              )}
+              {weeklyPlanGenerating ? "Generating..." : "Regenerate"}
+            </Button>
           </div>
+
+          {weeklyPlan?.week_focus && (
+            <p className="text-xs text-text-secondary leading-relaxed">
+              {weeklyPlan.week_focus}
+            </p>
+          )}
+
+          {weeklyPlanLoading || weeklyPlanGenerating ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className={cn("h-5 w-5 rounded shrink-0 mt-0.5", SKELETON_CLASS)} />
+                  <div className="flex-1 space-y-1.5">
+                    <div className={cn("h-4 w-full", SKELETON_CLASS)} />
+                    <div className={cn("h-3 w-20", SKELETON_CLASS)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : weeklyPlan && weeklyPlan.items.length > 0 ? (
+            <div className="space-y-1.5">
+              {weeklyPlan.items.map((item, idx) => {
+                const isToggling = togglingIndex === idx;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => toggleItemComplete(idx)}
+                    disabled={isToggling}
+                    className={cn(
+                      "flex items-start gap-3 w-full rounded-md px-3 py-2.5 text-left transition-default",
+                      "hover:bg-gray-50",
+                      item.is_completed && "opacity-60"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 mt-0.5 transition-default",
+                        item.is_completed
+                          ? "border-primary bg-primary"
+                          : "border-border bg-white"
+                      )}
+                    >
+                      {item.is_completed && (
+                        <Check className="h-3 w-3 text-white" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          "text-sm leading-5",
+                          item.is_completed
+                            ? "text-text-secondary line-through"
+                            : "text-text-primary"
+                        )}
+                      >
+                        {item.description}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-text-secondary capitalize">
+                          {item.category}
+                        </span>
+                        {item.carried_over && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#D97706] bg-[#D97706]/10 px-1.5 py-0.5 rounded-full">
+                            <RotateCcw className="h-2.5 w-2.5" />
+                            From last week
+                          </span>
+                        )}
+                        {item.source && item.source !== "ai" && (
+                          <span className="text-[10px] text-primary/70 capitalize">
+                            {item.source.replace("_", " ")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : !weeklyPlan ? (
+            <div className="text-center py-6">
+              <p className="text-sm text-text-secondary mb-3">
+                No weekly plan yet. Generate one to get started.
+              </p>
+              <Button
+                size="sm"
+                onClick={regenerateWeeklyPlan}
+                disabled={weeklyPlanGenerating}
+              >
+                Generate Plan
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary text-center py-4">
+              All tasks completed this week. Nice work!
+            </p>
+          )}
+
+          {weeklyPlan?.encouragement && !weeklyPlanLoading && !weeklyPlanGenerating && (
+            <p className="text-xs text-primary/80 italic pt-1">
+              {weeklyPlan.encouragement}
+            </p>
+          )}
         </div>
       </div>
 
