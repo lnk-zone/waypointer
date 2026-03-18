@@ -688,11 +688,43 @@ function JobDetailContent() {
               </Button>
             )}
 
-            {/* Already applied indicator */}
-            {isApplied && (
-              <div className="flex items-center gap-2 w-full rounded-sm border border-[#059669]/20 bg-[#059669]/5 px-4 py-2.5 text-sm font-medium text-[#059669]">
-                <CheckCircle2 className="h-4 w-4" />
-                Tracked as Applied
+            {/* Already applied indicator + advance to interviewing */}
+            {application?.status === "applied" && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 w-full rounded-sm border border-[#059669]/20 bg-[#059669]/5 px-4 py-2.5 text-sm font-medium text-[#059669]">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Tracked as Applied
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 border-[#D97706]/30 text-[#D97706] hover:bg-[#D97706]/5"
+                  onClick={async () => {
+                    setTrackSaving(true);
+                    try {
+                      const res = await fetch(`/api/v1/employee/jobs/${match.id}/track`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "interviewing" }),
+                      });
+                      const json = await res.json();
+                      if (res.ok) setApplication(json.data as ApplicationStatus);
+                    } finally {
+                      setTrackSaving(false);
+                    }
+                  }}
+                  disabled={trackSaving}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Mark as Interviewing
+                </Button>
+              </div>
+            )}
+
+            {/* Interviewing indicator */}
+            {application?.status === "interviewing" && (
+              <div className="flex items-center gap-2 w-full rounded-sm border border-[#D97706]/20 bg-[#D97706]/5 px-4 py-2.5 text-sm font-medium text-[#D97706]">
+                <MessageSquare className="h-4 w-4" />
+                Interviewing
               </div>
             )}
 
