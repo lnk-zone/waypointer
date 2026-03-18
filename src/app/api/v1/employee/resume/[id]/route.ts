@@ -15,7 +15,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { z } from "zod";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 const experienceEntrySchema = z.object({
   company: z.string().min(1),

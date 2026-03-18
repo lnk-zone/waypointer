@@ -5,7 +5,7 @@
  *
  * Programs are organizational containers only — no seats, tiers, or duration.
  */
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";

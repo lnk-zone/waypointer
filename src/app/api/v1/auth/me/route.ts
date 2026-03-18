@@ -4,7 +4,7 @@ import {
   isAuthError,
 } from "@/lib/api/auth-middleware";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 /**
  * GET /api/v1/auth/me

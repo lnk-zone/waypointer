@@ -19,7 +19,7 @@ import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 /**
  * Fetch the full snapshot data for a given snapshot ID.

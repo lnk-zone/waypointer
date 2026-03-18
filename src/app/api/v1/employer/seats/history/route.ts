@@ -2,7 +2,7 @@
  * GET /api/v1/employer/seats/history
  * Returns the employer's seat purchase history.
  */
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";

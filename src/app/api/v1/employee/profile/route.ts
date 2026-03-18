@@ -9,7 +9,7 @@ import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import { profileSchema } from "@/lib/validators/profile";
 import { z } from "zod";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 const profilePatchSchema = z.object({
   seniority: z.enum([

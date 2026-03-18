@@ -7,7 +7,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 /**
  * GET /api/v1/employee/welcome

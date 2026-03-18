@@ -2,7 +2,7 @@
  * GET /api/v1/employer/program/active
  * Returns the most recently created active program (for backward compat).
  */
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";

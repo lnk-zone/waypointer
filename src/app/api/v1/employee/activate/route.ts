@@ -4,7 +4,7 @@ import { activateEmployeeSchema } from "@/lib/validators/auth";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 import * as jose from "jose";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 /**
  * POST /api/v1/employee/activate

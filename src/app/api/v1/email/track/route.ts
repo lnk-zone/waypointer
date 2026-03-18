@@ -9,7 +9,7 @@
  * Uses Edge Runtime — lightweight DB update + redirect.
  */
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";

@@ -7,7 +7,7 @@
  * Uses Edge Runtime — read-only aggregation queries.
  */
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import {

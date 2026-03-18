@@ -3,7 +3,7 @@
  * Processes a seat purchase (simulated payment).
  * Creates a seat_purchases record and credits seats to the company account.
  */
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";

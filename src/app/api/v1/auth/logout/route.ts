@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { apiError, ERROR_CODES } from "@/lib/api/errors";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 /**
  * POST /api/v1/auth/logout

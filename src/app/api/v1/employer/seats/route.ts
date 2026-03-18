@@ -2,7 +2,7 @@
  * GET /api/v1/employer/seats
  * Returns the employer's account-level seat balance.
  */
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, requireEmployer } from "@/lib/api/auth-middleware";

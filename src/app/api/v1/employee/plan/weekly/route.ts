@@ -7,7 +7,7 @@
  * Uses Edge Runtime — lightweight read.
  */
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import {
