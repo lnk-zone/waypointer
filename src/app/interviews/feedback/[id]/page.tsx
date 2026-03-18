@@ -219,6 +219,27 @@ function FeedbackContent() {
     }
   }, [sessionId, fetchSession]);
 
+  // Check if recommendation was already added to weekly plan
+  useEffect(() => {
+    if (!data?.feedback?.next_recommendation) return;
+    const checkPlan = async () => {
+      try {
+        const res = await fetch("/api/v1/employee/plan/weekly");
+        if (!res.ok) return;
+        const json = await res.json();
+        const items = json.data?.items ?? [];
+        const alreadyAdded = items.some(
+          (item: { description?: string }) =>
+            item.description === data.feedback?.next_recommendation
+        );
+        if (alreadyAdded) setAddedToPlan(true);
+      } catch {
+        // Ignore
+      }
+    };
+    checkPlan();
+  }, [data]);
+
   // Add recommendation to weekly plan
   const handleAddToPlan = useCallback(async () => {
     if (!data?.feedback?.next_recommendation) return;
