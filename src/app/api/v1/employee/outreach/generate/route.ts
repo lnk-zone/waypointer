@@ -53,6 +53,8 @@ const generateRequestSchema = z.object({
   tone: z.enum(TONES).optional(),
   contact_name: z.string().max(200).optional(),
   contact_linkedin_url: z.string().url().optional().or(z.literal("")),
+  target_company: z.string().max(200).optional(),
+  target_role: z.string().max(200).optional(),
 });
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -213,6 +215,8 @@ export async function POST(request: NextRequest) {
         input.contact_linkedin_url && input.contact_linkedin_url.length > 0
           ? input.contact_linkedin_url
           : null,
+      target_company: input.target_company ?? null,
+      target_role: input.target_role ?? null,
     })
     .select("*")
     .single();

@@ -103,7 +103,8 @@ function OutreachContent() {
   // Form state
   const [recipient, setRecipient] = useState<string>("");
   const [rolePathId, setRolePathId] = useState<string>("");
-  const [companyContext, setCompanyContext] = useState<string>("");
+  const [targetCompany, setTargetCompany] = useState<string>("");
+  const [targetRole, setTargetRole] = useState<string>("");
   const [relationship, setRelationship] = useState<string>("cold");
   const [personalContext, setPersonalContext] = useState<string>("");
   const [tone, setTone] = useState<string>("warm");
@@ -222,7 +223,9 @@ function OutreachContent() {
           body: JSON.stringify({
             recipient,
             role_path_id: rolePathId,
-            company_or_job_context: companyContext,
+            company_or_job_context: [targetCompany, targetRole].filter(Boolean).join(" — "),
+            target_company: targetCompany.trim() || undefined,
+            target_role: targetRole.trim() || undefined,
             relationship,
             personal_context: personalContext,
             tone: toneOverride ?? tone,
@@ -250,7 +253,7 @@ function OutreachContent() {
         setGenerating(false);
       }
     },
-    [recipient, rolePathId, companyContext, relationship, personalContext, tone, contactName, contactLinkedinUrl]
+    [recipient, rolePathId, targetCompany, targetRole, relationship, personalContext, tone, contactName, contactLinkedinUrl]
   );
 
   // Regenerate with new tone (auto-regenerate if a result already exists)
@@ -451,23 +454,40 @@ function OutreachContent() {
                     </div>
                   </div>
 
-                  {/* Company / job context */}
+                  {/* Company */}
                   <div>
                     <label className="text-xs text-text-secondary mb-1 block">
-                      Company or Job{" "}
-                      <span className="text-text-secondary/60">
-                        (optional)
-                      </span>
+                      Company{" "}
+                      <span className="text-text-secondary/60">(optional)</span>
                     </label>
                     <input
                       type="text"
-                      value={companyContext}
+                      value={targetCompany}
                       onChange={(e) => {
-                        setCompanyContext(e.target.value);
+                        setTargetCompany(e.target.value);
                         setResult(null);
                         setSentConfirmed(false);
                       }}
-                      placeholder="e.g., Product Manager at Stripe"
+                      placeholder="e.g., Stripe"
+                      className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Role / Position */}
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">
+                      Role / Position{" "}
+                      <span className="text-text-secondary/60">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={targetRole}
+                      onChange={(e) => {
+                        setTargetRole(e.target.value);
+                        setResult(null);
+                        setSentConfirmed(false);
+                      }}
+                      placeholder="e.g., Senior Data Analyst"
                       className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-primary focus:outline-none"
                     />
                   </div>
