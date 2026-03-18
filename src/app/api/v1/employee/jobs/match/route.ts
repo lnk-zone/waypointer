@@ -1,12 +1,16 @@
 /**
  * POST /api/v1/employee/jobs/match
  *
- * Triggers AI-powered job matching for the authenticated employee.
- * Fetches active job listings, scores them against the employee's profile
- * and role paths using SCORE_JOB_BATCH, and persists results to job_matches.
+ * Triggers job ingestion from JSearch API, then AI-powered scoring
+ * against the employee's profile and role paths.
  *
- * Uses Node.js Runtime because batch matching processes up to 20 sequential
- * AI calls (200 listings / 10 per batch), which may exceed Edge Runtime limits.
+ * Pipeline:
+ * 1. Fetch fresh listings from JSearch for each role path's keywords + location
+ * 2. Upsert into job_listings table (deduplicated by external_id)
+ * 3. Score all active listings against employee profile via SCORE_JOB_BATCH
+ * 4. Persist scored matches to job_matches table
+ *
+ * Uses Node.js Runtime because batch matching processes sequential AI calls.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,8 +26,12 @@ import {
   assemblePathContext,
 } from "@/lib/api/paths-helpers";
 import { matchJobsForEmployee } from "@/lib/jobs/matching";
+import { ingestMultipleSearches } from "@/lib/jobs/ingest";
+import { JSearchProvider } from "@/lib/jobs/jsearch";
+import type { JobSearchParams } from "@/lib/jobs/provider";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -62,10 +70,46 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Assemble career context
+  // ── Step 1: Ingest fresh jobs from JSearch ─────────────────────────
+  const location = [employee.location_city, employee.location_state]
+    .filter(Boolean)
+    .join(", ");
+
+  // Build search params for each role path
+  const searches: JobSearchParams[] = rolePaths.map((path) => {
+    const keywords = (path.core_keywords as string[]) ?? [];
+    // Use path title as primary keyword if no core_keywords
+    const searchKeywords =
+      keywords.length > 0 ? keywords.slice(0, 3) : [path.title];
+    return {
+      keywords: searchKeywords,
+      location: location || "United States",
+      remote: employee.work_pref === "remote",
+      page: 1,
+    };
+  });
+
+  try {
+    const provider = new JSearchProvider();
+    const ingestResult = await ingestMultipleSearches(
+      supabase,
+      provider,
+      searches
+    );
+    console.log(
+      `[jobs/match] Ingested ${ingestResult.fetched} listings, upserted ${ingestResult.upserted}, errors: ${ingestResult.errors.length}`
+    );
+  } catch (err) {
+    // Log but continue — we may still have cached listings to score
+    console.error(
+      "[jobs/match] Ingestion error:",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  // ── Step 2: Assemble career context and run AI scoring ─────────────
   const context = await assemblePathContext(supabase, employee, snapshotId);
 
-  // Run matching
   const result = await matchJobsForEmployee(
     supabase,
     {
