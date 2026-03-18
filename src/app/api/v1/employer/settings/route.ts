@@ -23,6 +23,18 @@ const patchSchema = z.object({
     .min(1, "Company name is required")
     .max(200, "Company name is too long")
     .optional(),
+  brand_color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Invalid hex color")
+    .optional(),
+  support_email: z
+    .string()
+    .email("Invalid support email")
+    .optional(),
+  welcome_message: z
+    .string()
+    .max(2000, "Welcome message is too long")
+    .optional(),
   full_name: z
     .string()
     .min(1, "Full name is required")
@@ -52,7 +64,7 @@ export async function GET(request: NextRequest) {
     const [companyResult, adminResult] = await Promise.all([
       supabase
         .from("companies")
-        .select("name, logo_url")
+        .select("name, logo_url, brand_color, support_email, welcome_message")
         .eq("id", auth.companyId)
         .single(),
       supabase
@@ -66,11 +78,23 @@ export async function GET(request: NextRequest) {
       return apiError(ERROR_CODES.NOT_FOUND, "Settings data not found");
     }
 
+    // Generate presigned URL for logo if one exists
+    let logoPresignedUrl: string | null = null;
+    if (companyResult.data.logo_url) {
+      const { data: signedData } = await supabase.storage
+        .from("company-assets")
+        .createSignedUrl(companyResult.data.logo_url, 3600);
+      logoPresignedUrl = signedData?.signedUrl ?? null;
+    }
+
     return NextResponse.json({
       data: {
         company: {
           name: companyResult.data.name,
-          logo_url: companyResult.data.logo_url ?? null,
+          logo_url: logoPresignedUrl,
+          brand_color: companyResult.data.brand_color ?? "#2563EB",
+          support_email: companyResult.data.support_email ?? "",
+          welcome_message: companyResult.data.welcome_message ?? "",
         },
         admin: {
           id: adminResult.data.id,
@@ -114,18 +138,21 @@ export async function PATCH(request: NextRequest) {
     });
   }
 
-  const { company_name, full_name } = parsed.data;
+  const { company_name, brand_color, support_email, welcome_message, full_name } = parsed.data;
 
   try {
     const supabase = createServiceClient();
     const updates: PromiseLike<unknown>[] = [];
 
     // Update company fields
-    if (company_name !== undefined) {
-      const companyUpdate: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-        name: company_name,
-      };
+    const companyUpdate: Record<string, unknown> = {};
+    if (company_name !== undefined) companyUpdate.name = company_name;
+    if (brand_color !== undefined) companyUpdate.brand_color = brand_color;
+    if (support_email !== undefined) companyUpdate.support_email = support_email;
+    if (welcome_message !== undefined) companyUpdate.welcome_message = welcome_message;
+
+    if (Object.keys(companyUpdate).length > 0) {
+      companyUpdate.updated_at = new Date().toISOString();
 
       updates.push(
         supabase
