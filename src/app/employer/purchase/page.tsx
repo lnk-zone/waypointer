@@ -21,6 +21,7 @@ interface PurchaseResult {
 function PurchasePageContent() {
   const router = useRouter();
   const [quantity, setQuantity] = useState(10);
+  const [inputValue, setInputValue] = useState("10");
   const [state, setState] = useState<PurchaseState>("input");
   const [error, setError] = useState("");
   const [result, setResult] = useState<PurchaseResult | null>(null);
@@ -30,7 +31,27 @@ function PurchasePageContent() {
   const handleQuantityChange = (value: number) => {
     const clamped = Math.max(MIN_SEAT_PURCHASE, Math.min(10000, value));
     setQuantity(clamped);
+    setInputValue(clamped.toString());
     setError("");
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setInputValue(raw);
+    const parsed = parseInt(raw);
+    if (!isNaN(parsed) && parsed >= 1) {
+      setQuantity(Math.min(parsed, 10000));
+      setError("");
+    }
+  };
+
+  const handleInputBlur = () => {
+    const clamped = Math.max(MIN_SEAT_PURCHASE, Math.min(10000, quantity));
+    setQuantity(clamped);
+    setInputValue(clamped.toString());
+    if (quantity < MIN_SEAT_PURCHASE) {
+      setError(`Minimum purchase is ${MIN_SEAT_PURCHASE} seats`);
+    }
   };
 
   const handlePurchase = async () => {
@@ -129,8 +150,9 @@ function PurchasePageContent() {
               </button>
               <input
                 type="number"
-                value={quantity}
-                onChange={(e) => handleQuantityChange(parseInt(e.target.value) || MIN_SEAT_PURCHASE)}
+                value={inputValue}
+                onChange={handleInputChange}
+                onBlur={handleInputBlur}
                 min={MIN_SEAT_PURCHASE}
                 max={10000}
                 disabled={state === "processing"}
