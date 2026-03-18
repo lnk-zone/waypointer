@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────
