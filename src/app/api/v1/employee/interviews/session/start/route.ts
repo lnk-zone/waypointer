@@ -9,6 +9,7 @@
  */
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
   // Fetch the INTERVIEW_PERSONA prompt template from the prompt registry
   const { data: promptEntry, error: promptError } = await supabase
     .from("prompt_registry")
-    .select("system_prompt, user_prompt")
+    .select("system_prompt, user_prompt_template")
     .eq("prompt_id", "INTERVIEW_PERSONA")
     .single();
 

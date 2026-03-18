@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       .eq("employee_id", employee.id),
     // LinkedIn updated (check if any linkedin record exists)
     supabase
-      .from("linkedin_profiles")
+      .from("linkedin_content")
       .select("id", { count: "exact", head: true })
       .eq("employee_id", employee.id),
     // Applications tracked
