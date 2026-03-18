@@ -7,6 +7,7 @@ import { EmployeeRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/use-toast";
 import {
   ArrowUpDown,
   Briefcase,
@@ -338,11 +339,28 @@ function JobsFeedContent() {
     try {
       const res = await fetch("/api/v1/employee/jobs/match", { method: "POST" });
       if (res.ok) {
+        const json = await res.json();
+        const data = json.data;
+        if (data?.errors?.length > 0) {
+          toast.warning({
+            title: `Matched ${data.matched} jobs with ${data.errors.length} warning(s)`,
+            description: data.errors[0],
+          });
+        } else if (data?.matched > 0) {
+          toast.success({ title: `Found ${data.matched} job matches` });
+        }
         setPage(1);
         await fetchMatches();
+        await fetchTabCounts();
+      } else {
+        const json = await res.json().catch(() => null);
+        toast.error({
+          title: "Job matching failed",
+          description: json?.error?.message ?? "Please try again.",
+        });
       }
     } catch {
-      // Error handled by showing empty state
+      toast.error({ title: "Job matching failed", description: "Network error. Please try again." });
     } finally {
       clearTimeout(timer);
       setMatching(false);

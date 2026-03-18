@@ -64,7 +64,7 @@ export interface MatchResult {
 
 const BATCH_SIZE = 10; // Max listings per AI call per PR Prompt 9
 const UPSERT_BATCH_SIZE = 50;
-const MAX_LISTINGS = 200; // Cap to avoid excessive AI calls
+const MAX_LISTINGS = 10; // Single AI batch to stay within Vercel 60s function timeout
 
 // ─── Main Matching Function ──────────────────────────────────────────
 
