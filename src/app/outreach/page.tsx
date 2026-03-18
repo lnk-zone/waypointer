@@ -148,8 +148,8 @@ function OutreachContent() {
             if (primary) setRolePathId(primary.id);
           }
         }
-      } catch {
-        // Non-critical
+      } catch (err) {
+        console.error("[outreach] Failed to fetch paths:", err);
       }
     }
     fetchPaths();
