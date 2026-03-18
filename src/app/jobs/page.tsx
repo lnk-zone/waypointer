@@ -271,6 +271,8 @@ function JobsFeedContent() {
           }
         })
       );
+      // Applied count should include interviewing (interviewing is a progression from applied)
+      counts.applied = counts.applied + counts.interviewing;
       setTabCounts(counts);
     } catch {
       // Non-critical — counts just won't update
