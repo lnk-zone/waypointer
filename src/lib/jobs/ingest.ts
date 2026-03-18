@@ -182,9 +182,6 @@ export async function ingestMultipleSearches(
     errors: [],
   };
 
-  // Collect all fresh external_ids across all searches
-  const allFreshIds: string[] = [];
-
   for (const search of searches) {
     const result = await ingestJobListings(supabase, provider, search);
     merged.fetched += result.fetched;
@@ -192,28 +189,10 @@ export async function ingestMultipleSearches(
     merged.errors.push(...result.errors);
   }
 
-  // After all searches, fetch what was actually upserted (active listings)
-  // to build the fresh set. This is more accurate than tracking IDs in memory
-  // because some batches may have failed.
-  if (merged.upserted > 0) {
-    const { data: freshListings } = await supabase
-      .from("job_listings")
-      .select("external_id")
-      .eq("is_active", true);
-
-    if (freshListings) {
-      allFreshIds.push(...freshListings.map((l) => l.external_id as string));
-    }
-  }
-
-  // Mark stale once with the complete fresh set
-  if (allFreshIds.length > 0) {
-    const staleResult = await markStaleListings(supabase, allFreshIds);
-    merged.staleMarked = staleResult.staleMarked;
-    if (staleResult.error) {
-      merged.errors.push(staleResult.error);
-    }
-  }
+  // NOTE: We intentionally do NOT mark old listings as stale.
+  // Old listings may have existing job_matches tied to them. Marking them
+  // inactive would hide those matches from the employee's dashboard.
+  // Instead, listings accumulate and the matching engine skips already-matched ones.
 
   return merged;
 }

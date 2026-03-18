@@ -75,6 +75,15 @@ export async function POST(request: NextRequest) {
     .filter(Boolean)
     .join(", ");
 
+  // Calculate next page based on existing matches — so "Refresh" fetches NEW jobs
+  const { count: existingMatchCount } = await supabase
+    .from("job_matches")
+    .select("id", { count: "exact", head: true })
+    .eq("employee_id", employee.id);
+
+  // Each page returns ~10 results. Calculate next page to fetch fresh listings.
+  const nextPage = Math.min(Math.floor((existingMatchCount ?? 0) / 10) + 1, 100);
+
   // Build search params for each role path
   // Use the path title (e.g. "Senior Data Analyst at Financial Services companies")
   // as the primary search query — JSearch works best with natural job title queries,
@@ -87,7 +96,7 @@ export async function POST(request: NextRequest) {
       keywords: [jobTitle],
       location: location || "United States",
       remote: employee.work_pref === "remote",
-      page: 1,
+      page: nextPage,
     };
   });
 

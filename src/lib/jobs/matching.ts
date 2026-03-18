@@ -100,8 +100,18 @@ export async function matchJobsForEmployee(
   result.total_listings = totalActive ?? 0;
   result.listings_capped = result.total_listings > MAX_LISTINGS;
 
-  // Step 1b: Fetch active job listings (capped at MAX_LISTINGS)
-  const { data: listings, error: listError } = await supabase
+  // Step 1b: Get IDs of listings this employee already has matches for
+  const { data: existingMatches } = await supabase
+    .from("job_matches")
+    .select("job_listing_id")
+    .eq("employee_id", employee.employeeId);
+
+  const alreadyMatchedIds = new Set(
+    (existingMatches ?? []).map((m) => m.job_listing_id as string)
+  );
+
+  // Step 1c: Fetch active job listings NOT already matched (capped at MAX_LISTINGS)
+  let listingsQuery = supabase
     .from("job_listings")
     .select(
       "id, external_id, title, company_name, location, is_remote, is_hybrid, " +
@@ -110,6 +120,17 @@ export async function matchJobsForEmployee(
     .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(MAX_LISTINGS);
+
+  // Exclude already-matched listings so refresh finds NEW jobs
+  if (alreadyMatchedIds.size > 0) {
+    const excludeIds = Array.from(alreadyMatchedIds);
+    // Supabase .not().in() for exclusion — batch if needed
+    if (excludeIds.length <= 100) {
+      listingsQuery = listingsQuery.not("id", "in", `(${excludeIds.join(",")})`);
+    }
+  }
+
+  const { data: listings, error: listError } = await listingsQuery;
 
   if (listError) {
     result.errors.push(`Failed to fetch job listings: ${listError.message}`);
