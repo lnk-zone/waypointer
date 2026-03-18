@@ -464,23 +464,41 @@ function ResumeWorkspace() {
   // ─── Suggestion actions ─────────────────────────────────────────────
 
   const dismissSuggestion = useCallback((kitId: string, index: number) => {
-    setSuggestions((prev) =>
-      prev.map((s) =>
+    setSuggestions((prev) => {
+      const suggestion = prev.find((s) => s.kit_id === kitId && s.index === index);
+      if (suggestion) {
+        const editText = typeof suggestion.text === "string" ? suggestion.text : JSON.stringify(suggestion.text);
+        fetch("/api/v1/employee/resume/suggestions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kit_id: kitId, edit_text: editText }),
+        }).catch(() => {});
+      }
+      return prev.map((s) =>
         s.kit_id === kitId && s.index === index
           ? { ...s, dismissed: true }
           : s
-      )
-    );
+      );
+    });
   }, []);
 
   const applySuggestion = useCallback((kitId: string, index: number) => {
-    setSuggestions((prev) =>
-      prev.map((s) =>
+    setSuggestions((prev) => {
+      const suggestion = prev.find((s) => s.kit_id === kitId && s.index === index);
+      if (suggestion) {
+        const editText = typeof suggestion.text === "string" ? suggestion.text : JSON.stringify(suggestion.text);
+        fetch("/api/v1/employee/resume/suggestions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kit_id: kitId, edit_text: editText }),
+        }).catch(() => {});
+      }
+      return prev.map((s) =>
         s.kit_id === kitId && s.index === index
           ? { ...s, applied: true }
           : s
-      )
-    );
+      );
+    });
   }, []);
 
   // ─── Tone change → regenerate ─────────────────────────────────────
