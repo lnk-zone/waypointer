@@ -27,16 +27,12 @@ interface SessionFeedbackRecord {
   difficulty: string;
   duration_minutes: number;
   transcript: string | null;
+  job_match_id: string | null;
   overall_score: number | null;
-  overall_summary: string | null;
   clarity_score: number | null;
-  clarity_notes: string | null;
   specificity_score: number | null;
-  specificity_notes: string | null;
   confidence_score: number | null;
-  confidence_notes: string | null;
   filler_word_count: number | null;
-  filler_words_noted: string[] | null;
   answer_analyses: Array<{
     question: string;
     answer_summary: string;
@@ -97,10 +93,10 @@ export async function GET(
   const { data: rawSession, error: sessionError } = await supabase
     .from("interview_sessions")
     .select(
-      `id, employee_id, role_path_id, format, difficulty, duration_minutes,
-       transcript, overall_score, overall_summary, clarity_score, clarity_notes,
-       specificity_score, specificity_notes, confidence_score, confidence_notes,
-       filler_word_count, filler_words_noted, answer_analyses, strongest_stories,
+      `id, employee_id, role_path_id, job_match_id, format, difficulty, duration_minutes,
+       transcript, overall_score, clarity_score,
+       specificity_score, confidence_score,
+       filler_word_count, answer_analyses, strongest_stories,
        weak_answers, next_recommendation, feedback_generated, started_at,
        completed_at, created_at`
     )
@@ -150,15 +146,10 @@ export async function GET(
       feedback: session.feedback_generated
         ? {
             overall_score: session.overall_score,
-            overall_summary: session.overall_summary,
             clarity_score: session.clarity_score,
-            clarity_notes: session.clarity_notes,
             specificity_score: session.specificity_score,
-            specificity_notes: session.specificity_notes,
             confidence_score: session.confidence_score,
-            confidence_notes: session.confidence_notes,
             filler_word_count: session.filler_word_count,
-            filler_words_noted: session.filler_words_noted,
             answer_analyses: session.answer_analyses,
             strongest_stories: session.strongest_stories,
             weak_answers: session.weak_answers,

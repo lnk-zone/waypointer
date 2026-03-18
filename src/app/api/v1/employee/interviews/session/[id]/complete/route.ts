@@ -246,15 +246,10 @@ export async function POST(
       .from("interview_sessions")
       .update({
         overall_score: feedback.overall_score,
-        overall_summary: feedback.overall_summary,
         clarity_score: feedback.clarity_score,
-        clarity_notes: feedback.clarity_notes,
         specificity_score: feedback.specificity_score,
-        specificity_notes: feedback.specificity_notes,
         confidence_score: feedback.confidence_score,
-        confidence_notes: feedback.confidence_notes,
         filler_word_count: feedback.filler_word_count,
-        filler_words_noted: feedback.filler_words_noted,
         answer_analyses: feedback.answer_analyses,
         strongest_stories: feedback.strongest_stories,
         weak_answers: feedback.weak_answers,
