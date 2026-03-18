@@ -644,8 +644,8 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-8 px-4 md:flex-row">
           <WaypointerLogo size={24} variant="full" />
           <div className="flex gap-8 text-sm font-medium text-slate-500">
-            <Link href="#" className="hover:text-primary">Privacy Policy</Link>
-            <Link href="#" className="hover:text-primary">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-primary">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-primary">Terms of Service</Link>
           </div>
           <span className="text-sm text-slate-400">
             &copy; {new Date().getFullYear()} Waypointer. All rights reserved.
