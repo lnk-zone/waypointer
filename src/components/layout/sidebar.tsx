@@ -14,6 +14,7 @@ import {
   Send,
   Mic,
   BarChart3,
+  Settings,
   LogOut,
 } from "lucide-react";
 
@@ -166,8 +167,21 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Logout + Footer */}
+      {/* Settings + Logout + Footer */}
       <div className="border-t border-border px-2 lg:px-3 py-3 space-y-2">
+        <Link
+          href="/settings"
+          className={cn(
+            "flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium transition-default w-full",
+            "justify-center lg:justify-start",
+            pathname === "/settings"
+              ? "bg-primary-light text-primary border-l-2 border-primary"
+              : "text-text-secondary hover:bg-background hover:text-text-primary"
+          )}
+        >
+          <Settings className="h-5 w-5 shrink-0" />
+          <span className="hidden lg:block">Settings</span>
+        </Link>
         <button
           onClick={handleLogout}
           disabled={loggingOut}
