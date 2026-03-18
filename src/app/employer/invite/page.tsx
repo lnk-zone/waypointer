@@ -53,6 +53,7 @@ function InvitePageContent() {
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [employees, setEmployees] = useState<EmployeeEntry[]>([{ ...EMPTY_EMPLOYEE }]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -154,6 +155,41 @@ function InvitePageContent() {
       setError("Network error. Please try again.");
     } finally {
       setSending(false);
+    }
+  };
+
+  // ─── Revoke Invitation ─────────────────────────────────────────────
+  const handleRevoke = async (seatId: string, email: string) => {
+    if (!confirm(`Revoke invitation for ${email}? The seat will be returned to your available pool.`)) return;
+
+    setRevokingId(seatId);
+    try {
+      const res = await fetch("/api/v1/employer/invite", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seat_id: seatId }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setError(json?.error?.message ?? "Failed to revoke invitation");
+        return;
+      }
+
+      setSuccess("Invitation revoked. Seat returned to your available pool.");
+      // Refresh data
+      const [balanceRes, inviteRes] = await Promise.all([
+        fetch("/api/v1/employer/seats"),
+        fetch("/api/v1/employer/invite"),
+      ]);
+      const balanceJson = await balanceRes.json();
+      const inviteJson = await inviteRes.json();
+      if (balanceRes.ok && balanceJson.data) setBalance(balanceJson.data);
+      if (inviteRes.ok && inviteJson.data) setInvitations(inviteJson.data);
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setRevokingId(null);
     }
   };
 
@@ -412,6 +448,7 @@ function InvitePageContent() {
                   <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Department</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Status</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wide">Invited</th>
+                  <th className="px-5 py-3 text-right text-xs font-medium text-text-secondary uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -443,6 +480,20 @@ function InvitePageContent() {
                     </td>
                     <td className="px-5 py-3 text-text-secondary text-xs">
                       {inv.invited_at ? new Date(inv.invited_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {inv.status === "invited" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRevoke(inv.id, inv.email)}
+                          disabled={revokingId === inv.id}
+                          className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50 transition-colors"
+                        >
+                          {revokingId === inv.id ? "Revoking..." : "Revoke"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

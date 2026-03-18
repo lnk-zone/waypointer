@@ -347,3 +347,75 @@ export async function POST(request: NextRequest) {
     return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to process invitations");
   }
 }
+
+// ─── DELETE Handler — Revoke an invitation ────────────────────────────
+
+const revokeSchema = z.object({
+  seat_id: z.string().uuid("Invalid seat ID"),
+});
+
+export async function DELETE(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+  const roleError = requireEmployer(auth);
+  if (roleError) return roleError;
+
+  if (!auth.companyId) {
+    return apiError(ERROR_CODES.NOT_FOUND, "No company found.");
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid JSON body");
+  }
+
+  const parsed = revokeSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid seat ID");
+  }
+
+  try {
+    const supabase = createServiceClient();
+
+    // Fetch the seat — must belong to this company and be in "invited" status
+    const { data: seat, error: seatError } = await supabase
+      .from("seats")
+      .select("id, status, company_id")
+      .eq("id", parsed.data.seat_id)
+      .eq("company_id", auth.companyId)
+      .single();
+
+    if (seatError || !seat) {
+      return apiError(ERROR_CODES.NOT_FOUND, "Invitation not found");
+    }
+
+    if ((seat as { status: string }).status !== "invited") {
+      return apiError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Only pending invitations can be revoked. This employee has already activated their account."
+      );
+    }
+
+    // Delete the seat record
+    const { error: deleteError } = await supabase
+      .from("seats")
+      .delete()
+      .eq("id", parsed.data.seat_id);
+
+    if (deleteError) {
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to revoke invitation");
+    }
+
+    // Return the seat to the company's available pool
+    await supabase.rpc("assign_seats", {
+      p_company_id: auth.companyId,
+      p_count: -1,
+    });
+
+    return NextResponse.json({ data: { revoked: true } });
+  } catch {
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to revoke invitation");
+  }
+}
