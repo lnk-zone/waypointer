@@ -169,16 +169,11 @@ export async function GET(request: NextRequest) {
         .select("id", { count: "exact", head: true })
         .eq("employee_id", employee.id)
         .eq("is_marked_updated", true),
-      // Applications tracked
+      // Applications tracked (actual applications, not AI recommendations)
       supabase
-        .from("job_matches")
+        .from("applications")
         .select("id", { count: "exact", head: true })
-        .eq("employee_id", employee.id)
-        .in("recommended_action", [
-          "apply_now",
-          "reach_out_first",
-          "seek_referral",
-        ]),
+        .eq("employee_id", employee.id),
       // Outreach messages sent
       supabase
         .from("outreach_messages")

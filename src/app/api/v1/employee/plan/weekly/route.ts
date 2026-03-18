@@ -26,8 +26,6 @@ interface WeeklyPlanRecord {
   week_number: number;
   week_start: string;
   items: PlanItemStored[];
-  week_focus: string | null;
-  encouragement: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -61,7 +59,7 @@ export async function GET(request: NextRequest) {
   // Fetch the current week's plan
   const { data: rawPlan } = await supabase
     .from("weekly_plans")
-    .select("id, week_number, week_start, items, week_focus, encouragement, created_at, updated_at")
+    .select("id, week_number, week_start, items, created_at, updated_at")
     .eq("employee_id", employee.id)
     .eq("week_number", weekNumber)
     .single();
@@ -81,8 +79,6 @@ export async function GET(request: NextRequest) {
       week_number: plan.week_number,
       week_start: plan.week_start,
       items: plan.items,
-      week_focus: plan.week_focus,
-      encouragement: plan.encouragement,
       created_at: plan.created_at,
       updated_at: plan.updated_at,
     },
