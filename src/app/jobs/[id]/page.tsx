@@ -20,8 +20,10 @@ import {
   Lightbulb,
   MapPin,
   MessageSquare,
+  Mic,
   Package,
   Pencil,
+  RefreshCw,
   Shield,
   Sparkles,
   XCircle,
@@ -75,9 +77,35 @@ interface ApplicationKit {
   referral_request: string;
   resume_edits: ResumeEdit[];
   interview_themes: string[];
+  resume_match_score: number | null;
+  resume_match_projected: number | null;
+  resume_match_date: string | null;
   resume_recommendation?: string;
   created_at: string;
   updated_at: string;
+}
+
+interface ApplicationStatus {
+  id: string;
+  status: string;
+  applied_at: string | null;
+}
+
+interface InterviewSession {
+  id: string;
+  overall_score: number | null;
+  completed_at: string | null;
+  format: string | null;
+  feedback_generated: boolean;
+}
+
+interface JobDetailResponse {
+  data: {
+    match: JobMatchDetail;
+    kit: ApplicationKit | null;
+    application: ApplicationStatus | null;
+    interviews: InterviewSession[];
+  };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -102,6 +130,22 @@ const ACTION_LABELS: Record<string, string> = {
   skip: "Skip",
 };
 
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatShortDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────────────
 
 function JobDetailContent() {
@@ -110,22 +154,31 @@ function JobDetailContent() {
   const matchId = params.id as string;
 
   const [match, setMatch] = useState<JobMatchDetail | null>(null);
+  const [kit, setKit] = useState<ApplicationKit | null>(null);
+  const [application, setApplication] = useState<ApplicationStatus | null>(null);
+  const [interviews, setInterviews] = useState<InterviewSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [trackStatus, setTrackStatus] = useState<"idle" | "saving" | "saved" | "applied">("idle");
 
-  // Application kit state
-  const [kit, setKit] = useState<ApplicationKit | null>(null);
+  // Track as applied state
+  const [trackSaving, setTrackSaving] = useState(false);
+
+  // Kit generation state
   const [kitLoading, setKitLoading] = useState(false);
   const [kitError, setKitError] = useState<string | null>(null);
+
+  // Copy state
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Fetch job match detail via single-match lookup
+  // Resume match refresh state
+  const [refreshingScore, setRefreshingScore] = useState(false);
+
+  // Fetch all detail data from the new consolidated endpoint
   const fetchDetail = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/employee/jobs?match_id=${matchId}`);
+      const res = await fetch(`/api/v1/employee/jobs/${matchId}/detail`);
       if (!res.ok) {
         if (res.status === 404) {
           setError("Job match not found");
@@ -134,8 +187,11 @@ function JobDetailContent() {
         throw new Error("Failed to fetch job details");
       }
 
-      const json = await res.json();
-      setMatch(json.data as JobMatchDetail);
+      const json: JobDetailResponse = await res.json();
+      setMatch(json.data.match);
+      setKit(json.data.kit);
+      setApplication(json.data.application);
+      setInterviews(json.data.interviews);
     } catch {
       setError("Failed to load job details");
     } finally {
@@ -148,28 +204,52 @@ function JobDetailContent() {
   }, [fetchDetail]);
 
   // Track as applied
-  const handleTrack = async (status: "saved" | "applied") => {
+  const handleTrackApplied = async () => {
     if (!match) return;
-    setTrackStatus("saving");
+    setTrackSaving(true);
 
     try {
       const res = await fetch(`/api/v1/employee/jobs/${match.id}/track`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: "applied" }),
       });
 
       if (res.ok) {
-        setTrackStatus(status);
-      } else {
-        setTrackStatus("idle");
+        const json = await res.json();
+        setApplication(json.data as ApplicationStatus);
       }
     } catch {
-      setTrackStatus("idle");
+      // Silent failure — toast would be ideal here
+    } finally {
+      setTrackSaving(false);
     }
   };
 
-  // Generate or fetch application kit
+  // Save for later
+  const handleSave = async () => {
+    if (!match) return;
+    setTrackSaving(true);
+
+    try {
+      const res = await fetch(`/api/v1/employee/jobs/${match.id}/track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "saved" }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setApplication(json.data as ApplicationStatus);
+      }
+    } catch {
+      // Silent failure
+    } finally {
+      setTrackSaving(false);
+    }
+  };
+
+  // Generate application kit
   const handleGenerateKit = async () => {
     if (!match) return;
     setKitLoading(true);
@@ -198,6 +278,24 @@ function JobDetailContent() {
     }
   };
 
+  // Refresh resume match score (re-generate kit to get updated score)
+  const handleRefreshScore = async () => {
+    if (!match) return;
+    setRefreshingScore(true);
+    try {
+      // Re-fetch detail to get latest kit data
+      const res = await fetch(`/api/v1/employee/jobs/${matchId}/detail`);
+      if (res.ok) {
+        const json: JobDetailResponse = await res.json();
+        setKit(json.data.kit);
+      }
+    } catch {
+      // Silent failure
+    } finally {
+      setRefreshingScore(false);
+    }
+  };
+
   // Copy to clipboard
   const handleCopy = async (text: string, fieldName: string) => {
     try {
@@ -208,6 +306,11 @@ function JobDetailContent() {
       // Clipboard API not available
     }
   };
+
+  // Derived state
+  const isApplied =
+    application?.status === "applied" || application?.status === "interviewing";
+  const isSaved = application?.status === "saved";
 
   // Loading skeleton
   if (loading) {
@@ -263,13 +366,13 @@ function JobDetailContent() {
   const listing = match.job_listings;
   const fitConfig = FIT_CONFIG[match.fit];
   const compConfig = COMPETITION_CONFIG[match.competition_level];
-  const actionLabel = ACTION_LABELS[match.recommended_action] ?? match.recommended_action;
+  const actionLabel =
+    ACTION_LABELS[match.recommended_action] ?? match.recommended_action;
 
   let locationTag = "On-site";
   if (listing.is_remote) locationTag = "Remote";
   else if (listing.is_hybrid) locationTag = "Hybrid";
 
-  // Check if listing is inactive
   const isInactive = !listing.is_active;
 
   return (
@@ -282,6 +385,23 @@ function JobDetailContent() {
         <ArrowLeft className="h-4 w-4" />
         Back to Jobs
       </button>
+
+      {/* Applied banner */}
+      {isApplied && application?.applied_at && (
+        <div className="mb-4 rounded-md border border-[#059669]/20 bg-[#059669]/5 p-4 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-[#059669] shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-[#059669]">
+              Applied on {formatDate(application.applied_at)}
+            </p>
+            {application.status === "interviewing" && (
+              <p className="text-xs text-text-secondary mt-0.5">
+                Status: Interviewing
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Inactive warning */}
       {isInactive && (
@@ -296,7 +416,7 @@ function JobDetailContent() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left pane — Job details + Match analysis */}
+        {/* Left pane -- Job details + Match analysis */}
         <div className="lg:col-span-3 space-y-4">
           {/* Header card */}
           <div className="rounded-md border border-border bg-surface p-6">
@@ -360,7 +480,7 @@ function JobDetailContent() {
                   {(listing.salary_min || listing.salary_max) && (
                     <span>
                       {listing.salary_min && listing.salary_max
-                        ? `$${(listing.salary_min / 1000).toFixed(0)}K–$${(listing.salary_max / 1000).toFixed(0)}K`
+                        ? `$${(listing.salary_min / 1000).toFixed(0)}K\u2013$${(listing.salary_max / 1000).toFixed(0)}K`
                         : listing.salary_min
                           ? `From $${(listing.salary_min / 1000).toFixed(0)}K`
                           : `Up to $${((listing.salary_max ?? 0) / 1000).toFixed(0)}K`}
@@ -368,14 +488,7 @@ function JobDetailContent() {
                   )}
 
                   {listing.posted_at && (
-                    <span>
-                      Posted{" "}
-                      {new Date(listing.posted_at).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </span>
+                    <span>Posted {formatShortDate(listing.posted_at)}</span>
                   )}
                 </div>
               </div>
@@ -389,7 +502,6 @@ function JobDetailContent() {
               Match Analysis
             </h2>
 
-            {/* Match explanation */}
             <div className="mb-4">
               <p className="text-sm text-text-primary leading-relaxed">
                 {match.match_explanation}
@@ -397,7 +509,6 @@ function JobDetailContent() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Fit */}
               <div className="rounded-sm bg-background p-3">
                 <p className="text-xs text-text-secondary mb-1">Fit Score</p>
                 <span
@@ -411,7 +522,6 @@ function JobDetailContent() {
                 </span>
               </div>
 
-              {/* Competition */}
               <div className="rounded-sm bg-background p-3">
                 <p className="text-xs text-text-secondary mb-1">
                   Competition Level
@@ -421,7 +531,6 @@ function JobDetailContent() {
                 </span>
               </div>
 
-              {/* Recommended action */}
               <div className="rounded-sm bg-background p-3">
                 <p className="text-xs text-text-secondary mb-1">
                   Recommended Action
@@ -432,7 +541,6 @@ function JobDetailContent() {
               </div>
             </div>
 
-            {/* Compensation alignment */}
             {(listing.salary_min || listing.salary_max) && (
               <div className="mt-4 rounded-sm bg-background p-3">
                 <p className="text-xs text-text-secondary mb-1">
@@ -440,7 +548,7 @@ function JobDetailContent() {
                 </p>
                 <p className="text-sm font-medium text-text-primary">
                   {listing.salary_min && listing.salary_max
-                    ? `$${(listing.salary_min / 1000).toFixed(0)}K – $${(listing.salary_max / 1000).toFixed(0)}K`
+                    ? `$${(listing.salary_min / 1000).toFixed(0)}K \u2013 $${(listing.salary_max / 1000).toFixed(0)}K`
                     : listing.salary_min
                       ? `From $${(listing.salary_min / 1000).toFixed(0)}K`
                       : `Up to $${((listing.salary_max ?? 0) / 1000).toFixed(0)}K`}
@@ -448,7 +556,6 @@ function JobDetailContent() {
               </div>
             )}
 
-            {/* Requirements / skills from the listing */}
             {listing.requirements && listing.requirements.length > 0 && (
               <div className="mt-4">
                 <p className="text-xs text-text-secondary mb-2">
@@ -480,9 +587,68 @@ function JobDetailContent() {
                 "No description available."}
             </div>
           </div>
+
+          {/* Mock Interview Feedback */}
+          {interviews.length > 0 && (
+            <div className="rounded-md border border-border bg-surface p-6">
+              <h2 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+                <Mic className="h-4 w-4 text-primary" />
+                Mock Interview Sessions
+              </h2>
+              <div className="space-y-3">
+                {interviews.map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between rounded-sm bg-background p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-text-primary">
+                          {session.format
+                            ? session.format.charAt(0).toUpperCase() +
+                              session.format.slice(1)
+                            : "Interview"}{" "}
+                          Session
+                        </span>
+                        {session.completed_at && (
+                          <span className="text-xs text-text-secondary">
+                            {formatDate(session.completed_at)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {session.overall_score !== null && (
+                        <span
+                          className={cn(
+                            "text-sm font-semibold",
+                            session.overall_score >= 80
+                              ? "text-[#059669]"
+                              : session.overall_score >= 60
+                                ? "text-[#D97706]"
+                                : "text-[#DC2626]"
+                          )}
+                        >
+                          {session.overall_score}%
+                        </span>
+                      )}
+                      {session.feedback_generated && (
+                        <Link
+                          href={`/interviews/feedback/${session.id}`}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          View Feedback
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right pane — Application kit + CTAs */}
+        {/* Right pane -- Actions + Application kit */}
         <div className="lg:col-span-2 space-y-4">
           {/* CTAs */}
           <div className="rounded-md border border-border bg-surface p-6 space-y-3">
@@ -503,48 +669,107 @@ function JobDetailContent() {
               </a>
             )}
 
-            {/* Track as applied */}
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => handleTrack("applied")}
-              disabled={trackStatus === "saving" || trackStatus === "applied"}
-            >
-              {trackStatus === "applied" ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-[#059669]" />
-                  Tracked as Applied
-                </>
-              ) : trackStatus === "saving" ? (
-                "Saving..."
-              ) : (
-                <>
-                  <Check className="h-4 w-4" />
-                  Track as Applied
-                </>
-              )}
-            </Button>
+            {/* Track as applied -- only when no application or saved */}
+            {!isApplied && (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleTrackApplied}
+                disabled={trackSaving}
+              >
+                {trackSaving ? (
+                  "Saving..."
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Track as Applied
+                  </>
+                )}
+              </Button>
+            )}
 
-            {/* Save */}
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => handleTrack("saved")}
-              disabled={trackStatus === "saving" || trackStatus === "saved"}
-            >
-              {trackStatus === "saved" ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-[#059669]" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Bookmark className="h-4 w-4" />
-                  Save for Later
-                </>
-              )}
-            </Button>
+            {/* Already applied indicator */}
+            {isApplied && (
+              <div className="flex items-center gap-2 w-full rounded-sm border border-[#059669]/20 bg-[#059669]/5 px-4 py-2.5 text-sm font-medium text-[#059669]">
+                <CheckCircle2 className="h-4 w-4" />
+                Tracked as Applied
+              </div>
+            )}
+
+            {/* Save for later -- only when not already saved or applied */}
+            {!isApplied && !isSaved && (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleSave}
+                disabled={trackSaving}
+              >
+                <Bookmark className="h-4 w-4" />
+                Save for Later
+              </Button>
+            )}
+
+            {/* Already saved indicator */}
+            {isSaved && (
+              <div className="flex items-center gap-2 w-full rounded-sm border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary">
+                <Bookmark className="h-4 w-4" />
+                Saved
+              </div>
+            )}
+
+            {/* Start Mock Interview -- only when kit exists */}
+            {kit && (
+              <Link
+                href={`/interviews?job_match_id=${match.id}`}
+                className="flex items-center justify-center gap-2 w-full rounded-sm border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-background transition-default"
+              >
+                <Mic className="h-4 w-4" />
+                Start Mock Interview
+              </Link>
+            )}
           </div>
+
+          {/* Resume match score */}
+          {kit && kit.resume_match_score !== null && (
+            <div className="rounded-md border border-border bg-surface p-6">
+              <h2 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                Resume Match
+              </h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-text-primary">
+                    {kit.resume_match_score}%
+                  </p>
+                  {kit.resume_match_date && (
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      as of {formatShortDate(kit.resume_match_date)}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleRefreshScore}
+                  disabled={refreshingScore}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      refreshingScore && "animate-spin"
+                    )}
+                  />
+                  Refresh
+                </Button>
+              </div>
+              {kit.resume_match_projected !== null && (
+                <p className="text-xs text-text-secondary mt-2">
+                  Projected with edits: {kit.resume_match_projected}%
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Application Kit */}
           <div className="rounded-md border border-border bg-surface p-6">
@@ -553,7 +778,7 @@ function JobDetailContent() {
               Application Kit
             </h2>
 
-            {/* Kit not yet generated — show generate button */}
+            {/* Kit not yet generated -- show generate button */}
             {!kit && !kitLoading && !kitError && (
               <div className="rounded-sm bg-primary-light p-4 text-center">
                 <Sparkles className="h-8 w-8 text-primary mx-auto mb-2" />
@@ -566,7 +791,7 @@ function JobDetailContent() {
                 </p>
                 <Button size="sm" onClick={handleGenerateKit} className="gap-2">
                   <Sparkles className="h-4 w-4" />
-                  Generate Kit
+                  Generate Application Kit
                 </Button>
               </div>
             )}
@@ -580,7 +805,7 @@ function JobDetailContent() {
                     Building your tailored application kit...
                   </p>
                   <p className="text-xs text-text-secondary mt-1">
-                    This usually takes 15–30 seconds.
+                    This usually takes 15-30 seconds.
                   </p>
                 </div>
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -609,7 +834,7 @@ function JobDetailContent() {
               </div>
             )}
 
-            {/* Kit generated — show content */}
+            {/* Kit generated -- show all 6 sections */}
             {kit && !kitLoading && (
               <div className="space-y-4">
                 {/* Resume recommendation if no resume */}
@@ -625,12 +850,12 @@ function JobDetailContent() {
                       href="/resumes"
                       className="text-xs font-medium text-primary hover:underline mt-1 inline-block"
                     >
-                      Build Resume →
+                      Build Resume
                     </Link>
                   </div>
                 )}
 
-                {/* Intro paragraph */}
+                {/* 1. Intro paragraph */}
                 <KitSection
                   label="Cover Note"
                   icon={<FileText className="h-3.5 w-3.5" />}
@@ -640,7 +865,7 @@ function JobDetailContent() {
                   onCopy={handleCopy}
                 />
 
-                {/* Recruiter message */}
+                {/* 2. Recruiter message */}
                 <KitSection
                   label="Recruiter Message"
                   icon={<MessageSquare className="h-3.5 w-3.5" />}
@@ -648,10 +873,10 @@ function JobDetailContent() {
                   fieldName="recruiter_message"
                   copiedField={copiedField}
                   onCopy={handleCopy}
-                  hint="Under 300 characters — ideal for LinkedIn"
+                  hint="Under 300 characters \u2014 ideal for LinkedIn"
                 />
 
-                {/* Hiring manager message */}
+                {/* 3. Hiring manager message */}
                 <KitSection
                   label="Hiring Manager Message"
                   icon={<MessageSquare className="h-3.5 w-3.5" />}
@@ -661,7 +886,7 @@ function JobDetailContent() {
                   onCopy={handleCopy}
                 />
 
-                {/* Referral request */}
+                {/* 4. Referral request */}
                 <KitSection
                   label="Referral Request"
                   icon={<MessageSquare className="h-3.5 w-3.5" />}
@@ -672,7 +897,7 @@ function JobDetailContent() {
                   hint="For a mutual connection at the company"
                 />
 
-                {/* Resume edits */}
+                {/* 5. Resume edits */}
                 {kit.resume_edits && kit.resume_edits.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
@@ -705,7 +930,7 @@ function JobDetailContent() {
                   </div>
                 )}
 
-                {/* Interview themes */}
+                {/* 6. Interview themes */}
                 {kit.interview_themes && kit.interview_themes.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
@@ -744,7 +969,7 @@ function JobDetailContent() {
               href="/resumes"
               className="text-sm font-medium text-primary hover:underline"
             >
-              Go to Resume Workspace →
+              Go to Resume Workspace
             </Link>
           </div>
         </div>
