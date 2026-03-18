@@ -12,6 +12,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   LogOut,
+  Settings,
   Users,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ const EMPLOYER_NAV_ITEMS = [
   { label: "Programs", href: "/employer/programs", Icon: FolderOpen },
   { label: "Reporting", href: "/employer/outcomes", Icon: BarChart3 },
   { label: "Billing", href: "/employer/billing", Icon: CreditCard },
+  { label: "Settings", href: "/employer/settings", Icon: Settings },
 ] as const;
 
 export function EmployerSidebar() {
