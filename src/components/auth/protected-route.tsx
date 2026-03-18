@@ -117,11 +117,12 @@ export function EmployerRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Wrapper for employer setup page — allows both new users and existing admins.
+ * Wrapper for employer setup page — only new users who haven't set up a company yet.
+ * Existing employer admins are redirected to the dashboard.
  */
 export function EmployerSetupRoute({ children }: { children: React.ReactNode }) {
   return (
-    <ProtectedRoute allowedRoles={["employer_admin", "new_user"]}>
+    <ProtectedRoute allowedRoles={["new_user"]}>
       {children}
     </ProtectedRoute>
   );
