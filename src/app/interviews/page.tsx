@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { EmployeeRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  BarChart3,
   BookOpen,
   Brain,
   Building2,
@@ -16,9 +18,12 @@ import {
   Lightbulb,
   MessageCircle,
   Mic,
+  RefreshCw,
   Shield,
   Sparkles,
   Target,
+  TrendingDown,
+  TrendingUp,
   X,
 } from "lucide-react";
 
@@ -32,6 +37,7 @@ interface RolePath {
 
 interface SavedJob {
   id: string;
+  job_match_id: string;
   job_title: string;
   company_name: string;
 }
@@ -45,6 +51,25 @@ interface PrepData {
   strengths_to_emphasize: string[];
   weak_spots_to_prepare: string[];
   compensation_prep: string;
+}
+
+interface InterviewSession {
+  id: string;
+  overall_score: number | null;
+  clarity_score: number | null;
+  specificity_score: number | null;
+  confidence_score: number | null;
+  format: string;
+  completed_at: string;
+  feedback_generated: boolean;
+}
+
+interface PerformanceData {
+  sessions: InterviewSession[];
+  totalCompleted: number;
+  averageScore: number | null;
+  strongestArea: string | null;
+  weakestArea: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -66,6 +91,71 @@ const DIFFICULTY_OPTIONS = [
   { value: "challenging", label: "Challenging" },
 ] as const;
 
+const SCORE_AREAS = [
+  { key: "clarity_score" as const, label: "Clarity" },
+  { key: "specificity_score" as const, label: "Specificity" },
+  { key: "confidence_score" as const, label: "Confidence" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+
+function computePerformance(sessions: InterviewSession[]): PerformanceData {
+  const completed = sessions.filter((s) => s.overall_score !== null);
+  const totalCompleted = completed.length;
+
+  if (totalCompleted === 0) {
+    return {
+      sessions,
+      totalCompleted: 0,
+      averageScore: null,
+      strongestArea: null,
+      weakestArea: null,
+    };
+  }
+
+  const avgOverall =
+    completed.reduce((sum, s) => sum + (s.overall_score ?? 0), 0) / totalCompleted;
+
+  // Calculate average per area
+  const areaAverages = SCORE_AREAS.map((area) => {
+    const scored = completed.filter((s) => s[area.key] !== null);
+    if (scored.length === 0) return { label: area.label, avg: 0 };
+    const avg =
+      scored.reduce((sum, s) => sum + (s[area.key] ?? 0), 0) / scored.length;
+    return { label: area.label, avg };
+  }).filter((a) => a.avg > 0);
+
+  let strongestArea: string | null = null;
+  let weakestArea: string | null = null;
+
+  if (areaAverages.length > 0) {
+    const sorted = [...areaAverages].sort((a, b) => b.avg - a.avg);
+    strongestArea = sorted[0].label;
+    weakestArea = sorted[sorted.length - 1].label;
+    // Only differ if there's actually a difference
+    if (strongestArea === weakestArea && sorted.length > 1) {
+      weakestArea = sorted[1].label;
+    }
+  }
+
+  return {
+    sessions,
+    totalCompleted,
+    averageScore: Math.round(avgOverall),
+    strongestArea,
+    weakestArea,
+  };
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function capitalizeFirst(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 // ─── Component ────────────────────────────────────────────────────────
 
 function InterviewsContent() {
@@ -76,14 +166,18 @@ function InterviewsContent() {
   const [paths, setPaths] = useState<RolePath[]>([]);
   const [selectedPathId, setSelectedPathId] = useState<string>("");
 
-  // Saved jobs for company-specific prep
+  // Saved/applied jobs for company-specific prep
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
   const [selectedJobMatchId, setSelectedJobMatchId] = useState<string>("");
 
   // Prep data
   const [prep, setPrep] = useState<PrepData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isCached, setIsCached] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Performance sidebar
+  const [performance, setPerformance] = useState<PerformanceData | null>(null);
 
   // Mock interview config modal
   const [showModal, setShowModal] = useState(false);
@@ -97,7 +191,7 @@ function InterviewsContent() {
     useState<string>("standard");
   const [voiceAvailable, setVoiceAvailable] = useState<boolean | null>(null);
 
-  // Fetch role paths and saved jobs
+  // Fetch role paths, saved/applied jobs, and performance data
   useEffect(() => {
     async function fetchData() {
       try {
@@ -120,31 +214,29 @@ function InterviewsContent() {
             const primary = mapped.find((p: RolePath) => p.is_primary);
             if (primary) setSelectedPathId(primary.id);
           }
-        } else {
-          console.error(`[interviews] Paths API returned ${pathsRes.status}`);
         }
 
-        // Fetch saved jobs (applied or saved)
-        const jobsRes = await fetch(
-          "/api/v1/employee/jobs?page=1&per_page=50&sort=fit"
-        );
-        if (jobsRes.ok) {
-          const json = await jobsRes.json();
-          const matches = json.data ?? [];
-          const jobs: SavedJob[] = matches
+        // Fetch saved and applied jobs from applications table
+        const appsRes = await fetch("/api/v1/employee/applications?limit=50");
+        if (appsRes.ok) {
+          const json = await appsRes.json();
+          const apps = json.data ?? [];
+          const jobs: SavedJob[] = apps
             .filter(
-              (m: { job_title?: string; company_name?: string }) =>
-                m.job_title && m.company_name
+              (a: { job_title?: string; company_name?: string; job_match_id?: string }) =>
+                a.job_title && a.company_name && a.job_match_id
             )
             .map(
-              (m: {
+              (a: {
                 id: string;
+                job_match_id: string;
                 job_title: string;
                 company_name: string;
               }) => ({
-                id: m.id,
-                job_title: m.job_title,
-                company_name: m.company_name,
+                id: a.id,
+                job_match_id: a.job_match_id,
+                job_title: a.job_title,
+                company_name: a.company_name,
               })
             );
           setSavedJobs(jobs);
@@ -154,6 +246,23 @@ function InterviewsContent() {
       }
     }
     fetchData();
+  }, []);
+
+  // Fetch interview performance data
+  useEffect(() => {
+    async function fetchPerformance() {
+      try {
+        const res = await fetch("/api/v1/employee/interviews/performance");
+        if (res.ok) {
+          const json = await res.json();
+          const sessions: InterviewSession[] = json.data ?? [];
+          setPerformance(computePerformance(sessions));
+        }
+      } catch {
+        // Non-critical — sidebar simply won't show
+      }
+    }
+    fetchPerformance();
   }, []);
 
   // Auto-open mock interview modal when navigated with ?start_mock=true
@@ -181,109 +290,120 @@ function InterviewsContent() {
       });
   }, [showModal]);
 
-  // Fetch interview prep
-  const fetchPrep = useCallback(async () => {
-    if (!selectedPathId) return;
+  // Fetch interview prep (with optional regenerate flag)
+  const fetchPrep = useCallback(
+    async (forceRegenerate = false) => {
+      if (!selectedPathId) return;
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
+      setIsCached(false);
 
-    try {
-      const params = new URLSearchParams();
-      params.set("path_id", selectedPathId);
-      if (selectedJobMatchId) {
-        params.set("job_match_id", selectedJobMatchId);
-      }
+      try {
+        const params = new URLSearchParams();
+        params.set("path_id", selectedPathId);
+        if (selectedJobMatchId) {
+          params.set("job_match_id", selectedJobMatchId);
+        }
+        if (forceRegenerate) {
+          params.set("regenerate", "true");
+        }
 
-      const res = await fetch(
-        `/api/v1/employee/interviews/prep?${params.toString()}`
-      );
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => null);
-        throw new Error(
-          errJson?.error?.message ??
-            "Failed to generate interview prep materials"
+        const res = await fetch(
+          `/api/v1/employee/interviews/prep?${params.toString()}`
         );
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => null);
+          throw new Error(
+            errJson?.error?.message ??
+              "Failed to generate interview prep materials"
+          );
+        }
+
+        const json = await res.json();
+        setPrep(json.data as PrepData);
+        setIsCached(json.cached === true);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to generate interview prep materials"
+        );
+      } finally {
+        setLoading(false);
       }
+    },
+    [selectedPathId, selectedJobMatchId]
+  );
 
-      const json = await res.json();
-      setPrep(json.data as PrepData);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to generate interview prep materials"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedPathId, selectedJobMatchId]);
-
-  // Auto-fetch prep when path is first selected (initial load only)
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  // Auto-fetch prep when path or job context changes
+  const [lastFetchKey, setLastFetchKey] = useState<string>("");
   useEffect(() => {
-    if (selectedPathId && !initialLoadDone) {
-      setInitialLoadDone(true);
+    if (!selectedPathId) return;
+    const fetchKey = `${selectedPathId}:${selectedJobMatchId}`;
+    if (fetchKey !== lastFetchKey) {
+      setLastFetchKey(fetchKey);
       fetchPrep();
     }
-  }, [selectedPathId, initialLoadDone, fetchPrep]);
+  }, [selectedPathId, selectedJobMatchId, lastFetchKey, fetchPrep]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-8 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">
-            Interview Prep Hub
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Role-specific preparation to ace your interviews
-          </p>
-        </div>
-        <Button
-          onClick={() => setShowModal(true)}
-          disabled={!selectedPathId || loading}
-          className="gap-2"
-        >
-          <Mic className="h-4 w-4" />
-          Start Mock Interview
-        </Button>
-      </div>
-
-      {/* Path and Job selectors */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        {/* Role path selector */}
-        <div className="flex-1">
-          <label className="text-xs text-text-secondary mb-1 block">
-            Role Path
-          </label>
-          <div className="relative">
-            <select
-              value={selectedPathId}
-              onChange={(e) => {
-                setSelectedPathId(e.target.value);
-                setPrep(null);
-              }}
-              className="w-full appearance-none rounded-sm border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-primary focus:border-primary focus:outline-none"
-            >
-              <option value="">Select a role path</option>
-              {paths.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                  {p.is_primary ? " (Primary)" : ""}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary pointer-events-none" />
+    <div className="flex gap-6 max-w-6xl mx-auto px-4 md:px-8 py-8">
+      {/* Main content */}
+      <div className="flex-1 min-w-0">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary">
+              Interview Prep Hub
+            </h1>
+            <p className="text-sm text-text-secondary mt-1">
+              Role-specific preparation to ace your interviews
+            </p>
           </div>
+          <Button
+            onClick={() => setShowModal(true)}
+            disabled={!selectedPathId || loading}
+            className="gap-2"
+          >
+            <Mic className="h-4 w-4" />
+            Start Mock Interview
+          </Button>
         </div>
 
-        {/* Company-specific prep selector */}
-        {savedJobs.length > 0 && (
+        {/* Path and Context selectors */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          {/* Role path selector */}
           <div className="flex-1">
             <label className="text-xs text-text-secondary mb-1 block">
-              Company-Specific Prep{" "}
+              Role Path
+            </label>
+            <div className="relative">
+              <select
+                value={selectedPathId}
+                onChange={(e) => {
+                  setSelectedPathId(e.target.value);
+                  setPrep(null);
+                }}
+                className="w-full appearance-none rounded-sm border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-primary focus:border-primary focus:outline-none"
+              >
+                <option value="">Select a role path</option>
+                {paths.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                    {p.is_primary ? " (Primary)" : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Context dropdown (General + saved/applied jobs) */}
+          <div className="flex-1">
+            <label className="text-xs text-text-secondary mb-1 block">
+              Context{" "}
               <span className="text-text-secondary/60">(optional)</span>
             </label>
             <div className="relative">
@@ -295,195 +415,344 @@ function InterviewsContent() {
                 }}
                 className="w-full appearance-none rounded-sm border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-primary focus:border-primary focus:outline-none"
               >
-                <option value="">General prep only</option>
+                <option value="">General</option>
                 {savedJobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.job_title} at {j.company_name}
+                  <option key={j.id} value={j.job_match_id}>
+                    {j.company_name} — {j.job_title}
                   </option>
                 ))}
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary pointer-events-none" />
             </div>
           </div>
+        </div>
+
+        {/* Regenerate button (shown when content is loaded from cache) */}
+        {!loading && prep && isCached && (
+          <div className="mb-4 flex items-center gap-3">
+            <span className="text-xs text-text-secondary">
+              Loaded from cache
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchPrep(true)}
+              className="gap-1.5"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Regenerate
+            </Button>
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="space-y-4">
+            <div className="rounded-md border border-border bg-surface p-5">
+              <div className="rounded-sm bg-primary-light p-4 text-center">
+                <Sparkles className="h-6 w-6 text-primary mx-auto mb-2" />
+                <p className="text-sm font-medium text-primary">
+                  Preparing your interview materials...
+                </p>
+                <p className="text-xs text-text-secondary mt-1">
+                  Analyzing your profile and target role
+                </p>
+              </div>
+            </div>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-md border border-border bg-surface p-5 space-y-3"
+              >
+                <div className="h-5 w-48 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <div
+                    key={j}
+                    className="h-4 w-full animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]"
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="rounded-md border border-[#DC2626]/20 bg-[#DC2626]/5 p-5">
+            <p className="text-sm text-[#DC2626] font-medium mb-1">{error}</p>
+            <p className="text-xs text-text-secondary">
+              Check your selections and try again.
+            </p>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && !prep && !selectedPathId && (
+          <div className="rounded-md border border-border bg-surface p-8 text-center">
+            <BookOpen className="h-10 w-10 text-primary/30 mx-auto mb-3" />
+            <h3 className="text-sm font-medium text-text-primary mb-1">
+              Start your first mock interview to practice
+            </h3>
+            <p className="text-xs text-text-secondary max-w-sm mx-auto">
+              Select a role path above and we&apos;ll generate personalized
+              interview prep materials to help you prepare.
+            </p>
+          </div>
+        )}
+
+        {/* Prep content */}
+        {prep && !loading && (
+          <div className="space-y-4">
+            {/* Role path header */}
+            <div className="rounded-md border border-primary/20 bg-primary-light p-4 flex items-center gap-3">
+              <Target className="h-5 w-5 text-primary flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-text-primary">
+                  Prep for: {prep.role_path.title}
+                </p>
+                {prep.company_context && (
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Company: {prep.company_context.company_name} ·{" "}
+                    {prep.company_context.job_title}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Common questions */}
+            <PrepSection
+              icon={<MessageCircle className="h-4 w-4" />}
+              title="Common Questions"
+              description="Questions frequently asked for this role type"
+            >
+              <QuestionList items={prep.common_questions} />
+            </PrepSection>
+
+            {/* Behavioral questions */}
+            <PrepSection
+              icon={<Brain className="h-4 w-4" />}
+              title="Behavioral Questions"
+              description="'Tell me about a time...' questions relevant to your experience"
+            >
+              <QuestionList items={prep.behavioral_questions} />
+            </PrepSection>
+
+            {/* Company-specific questions */}
+            {prep.company_specific.length > 0 && (
+              <PrepSection
+                icon={<Building2 className="h-4 w-4" />}
+                title="Company-Specific Questions"
+                description={`Tailored for ${prep.company_context?.company_name ?? "this company"}`}
+              >
+                <QuestionList items={prep.company_specific} />
+              </PrepSection>
+            )}
+
+            {/* Strengths to emphasize */}
+            <PrepSection
+              icon={<Lightbulb className="h-4 w-4" />}
+              title="Strengths to Emphasize"
+              description="Key strengths to highlight during your interview"
+            >
+              <StrengthsList items={prep.strengths_to_emphasize} />
+            </PrepSection>
+
+            {/* Weak spots */}
+            <PrepSection
+              icon={<Shield className="h-4 w-4" />}
+              title="Weak Spots to Prepare For"
+              description="Areas the interviewer might probe — with guidance on how to address them"
+            >
+              <WeakSpotsList items={prep.weak_spots_to_prepare} />
+            </PrepSection>
+
+            {/* Compensation prep */}
+            <PrepSection
+              icon={<DollarSign className="h-4 w-4" />}
+              title="Compensation Conversation"
+              description="Guidance on discussing salary and benefits"
+            >
+              <div className="rounded-sm bg-background p-4 text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                {prep.compensation_prep}
+              </div>
+            </PrepSection>
+          </div>
+        )}
+
+        {/* Mock Interview Configuration Modal */}
+        {showModal && (
+          <MockInterviewModal
+            paths={paths}
+            selectedPathId={selectedPathId}
+            savedJobs={savedJobs}
+            interviewType={interviewType}
+            interviewJobId={interviewJobId}
+            interviewFormat={interviewFormat}
+            interviewDuration={interviewDuration}
+            interviewDifficulty={interviewDifficulty}
+            onChangeType={setInterviewType}
+            onChangeJobId={setInterviewJobId}
+            onChangeFormat={setInterviewFormat}
+            onChangeDuration={setInterviewDuration}
+            onChangeDifficulty={setInterviewDifficulty}
+            voiceAvailable={voiceAvailable}
+            onClose={() => setShowModal(false)}
+            onBegin={() => {
+              const params = new URLSearchParams();
+              params.set("path_id", selectedPathId);
+              params.set("format", interviewFormat);
+              params.set("difficulty", interviewDifficulty);
+              params.set("duration", String(interviewDuration));
+              if (interviewType === "company" && interviewJobId) {
+                params.set("job_match_id", interviewJobId);
+              }
+              router.push(`/interviews/session?${params.toString()}`);
+            }}
+          />
         )}
       </div>
 
-      {/* Generate prep button (shown when selections change after initial load) */}
-      {!loading && selectedPathId && initialLoadDone && !prep && !error && (
-        <div className="mb-4">
-          <Button onClick={fetchPrep} className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            Generate Interview Prep
-          </Button>
-        </div>
-      )}
+      {/* Performance Sidebar */}
+      <PerformanceSidebar performance={performance} />
+    </div>
+  );
+}
 
-      {/* Loading skeleton */}
-      {loading && (
-        <div className="space-y-4">
-          <div className="rounded-md border border-border bg-surface p-5">
-            <div className="rounded-sm bg-primary-light p-4 text-center">
-              <Sparkles className="h-6 w-6 text-primary mx-auto mb-2" />
-              <p className="text-sm font-medium text-primary">
-                Preparing your interview materials...
-              </p>
-              <p className="text-xs text-text-secondary mt-1">
-                Analyzing your profile and target role
-              </p>
-            </div>
-          </div>
-          {Array.from({ length: 4 }).map((_, i) => (
+// ─── Performance Sidebar ──────────────────────────────────────────────
+
+function PerformanceSidebar({
+  performance,
+}: {
+  performance: PerformanceData | null;
+}) {
+  if (!performance) {
+    // Loading skeleton for sidebar
+    return (
+      <aside className="hidden lg:block w-[300px] flex-shrink-0">
+        <div className="rounded-md border border-border bg-surface p-5 space-y-4 sticky top-8">
+          <div className="h-5 w-48 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="rounded-md border border-border bg-surface p-5 space-y-3"
-            >
-              <div className="h-5 w-48 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
-              {Array.from({ length: 3 }).map((_, j) => (
-                <div
-                  key={j}
-                  className="h-4 w-full animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]"
-                />
-              ))}
-            </div>
+              className="h-4 w-full animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]"
+            />
           ))}
         </div>
-      )}
+      </aside>
+    );
+  }
 
-      {/* Error */}
-      {error && !loading && (
-        <div className="rounded-md border border-[#DC2626]/20 bg-[#DC2626]/5 p-5">
-          <p className="text-sm text-[#DC2626] font-medium mb-1">{error}</p>
-          <p className="text-xs text-text-secondary">
-            Check your selections and try again.
-          </p>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && !error && !prep && !selectedPathId && (
-        <div className="rounded-md border border-border bg-surface p-8 text-center">
-          <BookOpen className="h-10 w-10 text-primary/30 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-text-primary mb-1">
-            Start your first mock interview to practice
+  return (
+    <aside className="hidden lg:block w-[300px] flex-shrink-0">
+      <div className="rounded-md border border-border bg-surface p-5 sticky top-8">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-text-primary">
+            Mock Interview Performance
           </h3>
-          <p className="text-xs text-text-secondary max-w-sm mx-auto">
-            Select a role path above and we&apos;ll generate personalized
-            interview prep materials to help you prepare.
-          </p>
         </div>
-      )}
 
-      {/* Prep content */}
-      {prep && !loading && (
-        <div className="space-y-4">
-          {/* Role path header */}
-          <div className="rounded-md border border-primary/20 bg-primary-light p-4 flex items-center gap-3">
-            <Target className="h-5 w-5 text-primary flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-text-primary">
-                Prep for: {prep.role_path.title}
-              </p>
-              {prep.company_context && (
-                <p className="text-xs text-text-secondary mt-0.5">
-                  Company: {prep.company_context.company_name} ·{" "}
-                  {prep.company_context.job_title}
+        {performance.totalCompleted === 0 ? (
+          <div className="text-center py-4">
+            <Mic className="h-8 w-8 text-primary/20 mx-auto mb-2" />
+            <p className="text-xs text-text-secondary">
+              Complete a mock interview to see your performance stats here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-sm bg-background p-3">
+                <p className="text-xs text-text-secondary">Sessions</p>
+                <p className="text-lg font-semibold text-text-primary">
+                  {performance.totalCompleted}
                 </p>
-              )}
+              </div>
+              <div className="rounded-sm bg-background p-3">
+                <p className="text-xs text-text-secondary">Avg Score</p>
+                <p className="text-lg font-semibold text-primary">
+                  {performance.averageScore ?? "—"}
+                  {performance.averageScore !== null && (
+                    <span className="text-xs text-text-secondary font-normal">
+                      /100
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Strongest / Weakest */}
+            {performance.strongestArea && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 rounded-sm bg-[#059669]/5 border border-[#059669]/10 p-2.5">
+                  <TrendingUp className="h-3.5 w-3.5 text-[#059669] flex-shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-text-secondary">Strongest</p>
+                    <p className="text-xs font-medium text-text-primary">
+                      {performance.strongestArea}
+                    </p>
+                  </div>
+                </div>
+                {performance.weakestArea &&
+                  performance.weakestArea !== performance.strongestArea && (
+                    <div className="flex items-center gap-2 rounded-sm bg-[#D97706]/5 border border-[#D97706]/10 p-2.5">
+                      <TrendingDown className="h-3.5 w-3.5 text-[#D97706] flex-shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-text-secondary">
+                          Needs work
+                        </p>
+                        <p className="text-xs font-medium text-text-primary">
+                          {performance.weakestArea}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Recent sessions */}
+            <div>
+              <p className="text-xs font-medium text-text-secondary mb-2">
+                Recent Sessions
+              </p>
+              <div className="space-y-1.5">
+                {performance.sessions.slice(0, 5).map((session) => (
+                  <Link
+                    key={session.id}
+                    href={`/interviews/feedback/${session.id}`}
+                    className="flex items-center justify-between rounded-sm bg-background p-2.5 hover:bg-primary-light transition-default group"
+                  >
+                    <div>
+                      <p className="text-xs font-medium text-text-primary group-hover:text-primary transition-default">
+                        {capitalizeFirst(session.format)}
+                      </p>
+                      <p className="text-[10px] text-text-secondary">
+                        {formatDate(session.completed_at)}
+                      </p>
+                    </div>
+                    {session.overall_score !== null && (
+                      <span
+                        className={cn(
+                          "text-xs font-semibold",
+                          session.overall_score >= 70
+                            ? "text-[#059669]"
+                            : session.overall_score >= 50
+                              ? "text-[#D97706]"
+                              : "text-[#DC2626]"
+                        )}
+                      >
+                        {session.overall_score}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
-
-          {/* Common questions */}
-          <PrepSection
-            icon={<MessageCircle className="h-4 w-4" />}
-            title="Common Questions"
-            description="Questions frequently asked for this role type"
-          >
-            <QuestionList items={prep.common_questions} />
-          </PrepSection>
-
-          {/* Behavioral questions */}
-          <PrepSection
-            icon={<Brain className="h-4 w-4" />}
-            title="Behavioral Questions"
-            description="'Tell me about a time...' questions relevant to your experience"
-          >
-            <QuestionList items={prep.behavioral_questions} />
-          </PrepSection>
-
-          {/* Company-specific questions */}
-          {prep.company_specific.length > 0 && (
-            <PrepSection
-              icon={<Building2 className="h-4 w-4" />}
-              title="Company-Specific Questions"
-              description={`Tailored for ${prep.company_context?.company_name ?? "this company"}`}
-            >
-              <QuestionList items={prep.company_specific} />
-            </PrepSection>
-          )}
-
-          {/* Strengths to emphasize */}
-          <PrepSection
-            icon={<Lightbulb className="h-4 w-4" />}
-            title="Strengths to Emphasize"
-            description="Key strengths to highlight during your interview"
-          >
-            <StrengthsList items={prep.strengths_to_emphasize} />
-          </PrepSection>
-
-          {/* Weak spots */}
-          <PrepSection
-            icon={<Shield className="h-4 w-4" />}
-            title="Weak Spots to Prepare For"
-            description="Areas the interviewer might probe — with guidance on how to address them"
-          >
-            <WeakSpotsList items={prep.weak_spots_to_prepare} />
-          </PrepSection>
-
-          {/* Compensation prep */}
-          <PrepSection
-            icon={<DollarSign className="h-4 w-4" />}
-            title="Compensation Conversation"
-            description="Guidance on discussing salary and benefits"
-          >
-            <div className="rounded-sm bg-background p-4 text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
-              {prep.compensation_prep}
-            </div>
-          </PrepSection>
-        </div>
-      )}
-
-      {/* Mock Interview Configuration Modal */}
-      {showModal && (
-        <MockInterviewModal
-          paths={paths}
-          selectedPathId={selectedPathId}
-          savedJobs={savedJobs}
-          interviewType={interviewType}
-          interviewJobId={interviewJobId}
-          interviewFormat={interviewFormat}
-          interviewDuration={interviewDuration}
-          interviewDifficulty={interviewDifficulty}
-          onChangeType={setInterviewType}
-          onChangeJobId={setInterviewJobId}
-          onChangeFormat={setInterviewFormat}
-          onChangeDuration={setInterviewDuration}
-          onChangeDifficulty={setInterviewDifficulty}
-          voiceAvailable={voiceAvailable}
-          onClose={() => setShowModal(false)}
-          onBegin={() => {
-            const params = new URLSearchParams();
-            params.set("path_id", selectedPathId);
-            params.set("format", interviewFormat);
-            params.set("difficulty", interviewDifficulty);
-            params.set("duration", String(interviewDuration));
-            if (interviewType === "company" && interviewJobId) {
-              params.set("job_match_id", interviewJobId);
-            }
-            router.push(`/interviews/session?${params.toString()}`);
-          }}
-        />
-      )}
-    </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -681,7 +950,7 @@ function MockInterviewModal({
                 >
                   <option value="">Select a company</option>
                   {savedJobs.map((j) => (
-                    <option key={j.id} value={j.id}>
+                    <option key={j.id} value={j.job_match_id}>
                       {j.job_title} at {j.company_name}
                     </option>
                   ))}

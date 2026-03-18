@@ -3,12 +3,12 @@
  *
  * Generates role-specific interview preparation materials using the
  * GENERATE_INTERVIEW_PREP AI pipeline (PR Prompt 14).
+ * Caches results in the interview_prep table to avoid redundant AI calls.
  *
- * Query params: ?path_id=uuid&job_match_id=uuid (both optional)
- * If path_id is omitted, uses the primary role path.
- * If job_match_id is provided, includes company-specific prep.
- *
- * Uses Edge Runtime for lower cold start (single AI call proxy).
+ * Query params:
+ *   path_id       — UUID of the target role path (optional; defaults to primary)
+ *   job_match_id  — UUID of a specific job match for company-specific prep (optional)
+ *   regenerate    — "true" to force AI regeneration and overwrite cache
  */
 
 export const runtime = "nodejs";
@@ -49,6 +49,16 @@ interface JobMatchRow {
   };
 }
 
+interface InterviewPrepRow {
+  id: string;
+  employee_id: string;
+  role_path_id: string;
+  job_match_id: string | null;
+  content: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── Route Handler ───────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -62,6 +72,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const pathId = searchParams.get("path_id");
   const jobMatchId = searchParams.get("job_match_id");
+  const regenerate = searchParams.get("regenerate") === "true";
 
   // Get employee and snapshot
   const {
@@ -107,6 +118,51 @@ export async function GET(request: NextRequest) {
       "No role path found. Complete role targeting first."
     );
   }
+
+  const resolvedPathId = rolePath.id;
+
+  // ─── Cache Check ─────────────────────────────────────────────────
+
+  if (!regenerate) {
+    let cacheQuery = supabase
+      .from("interview_prep")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("role_path_id", resolvedPathId);
+
+    if (jobMatchId) {
+      cacheQuery = cacheQuery.eq("job_match_id", jobMatchId);
+    } else {
+      cacheQuery = cacheQuery.is("job_match_id", null);
+    }
+
+    const { data: cached } = await cacheQuery.single();
+
+    if (cached) {
+      const row = cached as unknown as InterviewPrepRow;
+      return NextResponse.json({ data: row.content, cached: true });
+    }
+  }
+
+  // ─── Delete existing cache if regenerating ───────────────────────
+
+  if (regenerate) {
+    let deleteQuery = supabase
+      .from("interview_prep")
+      .delete()
+      .eq("employee_id", employee.id)
+      .eq("role_path_id", resolvedPathId);
+
+    if (jobMatchId) {
+      deleteQuery = deleteQuery.eq("job_match_id", jobMatchId);
+    } else {
+      deleteQuery = deleteQuery.is("job_match_id", null);
+    }
+
+    await deleteQuery;
+  }
+
+  // ─── AI Generation ───────────────────────────────────────────────
 
   // Get the full role path details for the prompt
   const { data: rawPathDetails } = await supabase
@@ -171,7 +227,60 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Log activity (fire-and-forget)
+  // ─── Build response payload ──────────────────────────────────────
+
+  const responseData = {
+    role_path: {
+      id: rolePath.id,
+      title: rolePath.title,
+    },
+    ...(hasCompanyContext
+      ? { company_context: { company_name: companyName, job_title: jobTitle } }
+      : {}),
+    common_questions: aiResult.common_questions,
+    behavioral_questions: aiResult.behavioral_questions,
+    company_specific: aiResult.company_specific,
+    strengths_to_emphasize: aiResult.strengths_to_emphasize,
+    weak_spots_to_prepare: aiResult.weak_spots_to_prepare,
+    compensation_prep: aiResult.compensation_prep,
+  };
+
+  // ─── Persist to cache ────────────────────────────────────────────
+
+  // Check if an entry already exists (for upsert with nullable column)
+  let existingCacheQuery = supabase
+    .from("interview_prep")
+    .select("id")
+    .eq("employee_id", employee.id)
+    .eq("role_path_id", resolvedPathId);
+
+  if (jobMatchId) {
+    existingCacheQuery = existingCacheQuery.eq("job_match_id", jobMatchId);
+  } else {
+    existingCacheQuery = existingCacheQuery.is("job_match_id", null);
+  }
+
+  const { data: existingCache } = await existingCacheQuery.single();
+
+  if (existingCache) {
+    await supabase
+      .from("interview_prep")
+      .update({
+        content: responseData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", (existingCache as { id: string }).id);
+  } else {
+    await supabase.from("interview_prep").insert({
+      employee_id: employee.id,
+      role_path_id: resolvedPathId,
+      job_match_id: jobMatchId || null,
+      content: responseData,
+    });
+  }
+
+  // ─── Log activity (fire-and-forget) ──────────────────────────────
+
   Promise.resolve(
     supabase.from("activity_log").insert({
       employee_id: employee.id,
@@ -185,21 +294,5 @@ export async function GET(request: NextRequest) {
     // Swallow — activity logging is non-critical
   });
 
-  return NextResponse.json({
-    data: {
-      role_path: {
-        id: rolePath.id,
-        title: rolePath.title,
-      },
-      ...(hasCompanyContext
-        ? { company_context: { company_name: companyName, job_title: jobTitle } }
-        : {}),
-      common_questions: aiResult.common_questions,
-      behavioral_questions: aiResult.behavioral_questions,
-      company_specific: aiResult.company_specific,
-      strengths_to_emphasize: aiResult.strengths_to_emphasize,
-      weak_spots_to_prepare: aiResult.weak_spots_to_prepare,
-      compensation_prep: aiResult.compensation_prep,
-    },
-  });
+  return NextResponse.json({ data: responseData });
 }
