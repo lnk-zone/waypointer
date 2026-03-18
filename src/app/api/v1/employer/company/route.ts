@@ -75,13 +75,6 @@ export async function POST(request: NextRequest) {
       .eq("auth_user_id", auth.user.id)
       .single();
 
-    if (existingAdmin) {
-      return apiError(
-        ERROR_CODES.CONFLICT,
-        "You already have a company set up"
-      );
-    }
-
     // Parse multipart form data
     const formData = await request.formData();
     const bodyStr = formData.get("data");
@@ -149,7 +142,56 @@ export async function POST(request: NextRequest) {
       logoUrl = filePath;
     }
 
-    // Create company record
+    // If user already has a company (created during signup), UPDATE it
+    // instead of creating a new one.
+    if (existingAdmin) {
+      const updatePayload: Record<string, unknown> = {
+        name: input.name,
+        brand_color: input.brand_color,
+        support_email: input.support_email,
+        welcome_message: input.welcome_message,
+        default_program_duration_days: input.default_program_duration_days,
+        updated_at: new Date().toISOString(),
+      };
+      if (logoUrl) {
+        updatePayload.logo_url = logoUrl;
+      }
+
+      const { data: rawCompany, error: updateError } = await supabase
+        .from("companies")
+        .update(updatePayload)
+        .eq("id", existingAdmin.company_id)
+        .select("id, name, logo_url, brand_color, support_email, welcome_message, default_program_duration_days")
+        .single();
+
+      if (updateError || !rawCompany) {
+        return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to update company");
+      }
+
+      const company = rawCompany as unknown as CompanyRecord;
+
+      let logoPresignedUrl: string | null = null;
+      if (company.logo_url) {
+        const { data: signedData } = await supabase.storage
+          .from("company-assets")
+          .createSignedUrl(company.logo_url, 3600);
+        logoPresignedUrl = signedData?.signedUrl ?? null;
+      }
+
+      return NextResponse.json({
+        data: {
+          id: company.id,
+          name: company.name,
+          logo_url: logoPresignedUrl,
+          brand_color: company.brand_color,
+          support_email: company.support_email,
+          welcome_message: company.welcome_message,
+          default_program_duration_days: company.default_program_duration_days,
+        },
+      });
+    }
+
+    // No existing company — create new company + admin records
     const { data: rawCompany, error: companyError } = await supabase
       .from("companies")
       .insert({
@@ -191,11 +233,6 @@ export async function POST(request: NextRequest) {
         "Failed to create admin record"
       );
     }
-
-    // Additional admin emails are collected but their employer_admin records
-    // are created only when they register and claim their accounts. The
-    // auth_user_id UNIQUE constraint prevents creating placeholder rows.
-    // These emails will be used to send invitation emails in a future step.
 
     // Generate presigned URL for logo if one was uploaded
     let logoPresignedUrl: string | null = null;
