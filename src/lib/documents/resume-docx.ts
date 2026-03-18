@@ -1,12 +1,13 @@
 /**
  * Professional DOCX resume builder using the `docx` npm package.
  *
- * Design principles (per 2025–2026 best practices):
- * - Single-column layout for ATS compatibility
- * - Clean typography hierarchy with proper spacing
- * - Minimal decoration — content is the focus
- * - Generous whitespace, no clutter
- * - US Letter, 0.55" margins
+ * Design: Clean modern layout with colored header band and accent highlights.
+ * - Full-width navy header with name and contact in white
+ * - Blue accent section headers with bottom borders
+ * - Skills displayed as inline tags
+ * - Clean typography with Inter font
+ * - ATS-compatible single-column layout
+ * - US Letter, balanced margins
  */
 
 import {
@@ -19,6 +20,7 @@ import {
   TabStopPosition,
   TabStopType,
   BorderStyle,
+  ShadingType,
 } from "docx";
 
 import type { ResumeDocumentProps } from "@/types/resume";
@@ -27,11 +29,16 @@ export type ResumeDocxProps = ResumeDocumentProps;
 
 // ─── Colors ──────────────────────────────────────────────────────────
 
-const BLACK = "1A1A1A";
-const DARK = "2D2D2D";
-const BODY = "404040";
-const MUTED = "666666";
-const RULE = "CCCCCC";
+const NAVY = "1B2A4A";
+const ACCENT = "2563EB";
+const WHITE = "FFFFFF";
+const BLACK = "111827";
+const DARK = "1F2937";
+const BODY = "374151";
+const MUTED = "6B7280";
+const BORDER = "E5E7EB";
+const SKILL_BG = "EFF6FF";
+const SKILL_TEXT = "1E40AF";
 
 // ─── Builder ─────────────────────────────────────────────────────────
 
@@ -50,51 +57,106 @@ export async function buildResumeDocx(
 
   const children: Paragraph[] = [];
 
-  // ── Name ──
+  // ── Header Band (Navy background with name + contact) ──
   children.push(
     new Paragraph({
-      spacing: { after: 40 },
+      spacing: { before: 0, after: 0 },
+      shading: { type: ShadingType.SOLID, color: NAVY, fill: NAVY },
+      children: [
+        new TextRun({
+          text: " ",
+          size: 12,
+          color: NAVY,
+        }),
+      ],
+    })
+  );
+
+  children.push(
+    new Paragraph({
+      alignment: AlignmentType.LEFT,
+      spacing: { before: 200, after: 40 },
+      shading: { type: ShadingType.SOLID, color: NAVY, fill: NAVY },
       children: [
         new TextRun({
           text: employeeName,
           bold: true,
-          size: 48, // 24pt
-          color: BLACK,
+          size: 48,
+          color: WHITE,
           font: "Inter",
         }),
       ],
     })
   );
 
-  // ── Contact ──
   if (contactInfo) {
+    const parts = contactInfo
+      .split(/\s*[|·•]\s*|\s*,\s*/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const contactRuns: TextRun[] = [];
+    parts.forEach((part, i) => {
+      contactRuns.push(
+        new TextRun({
+          text: part,
+          size: 18,
+          color: WHITE,
+          font: "Inter",
+        })
+      );
+      if (i < parts.length - 1) {
+        contactRuns.push(
+          new TextRun({
+            text: "    \u007C    ",
+            size: 18,
+            color: "94A3B8",
+            font: "Inter",
+          })
+        );
+      }
+    });
+
     children.push(
       new Paragraph({
-        spacing: { after: 120 },
-        children: [
-          new TextRun({
-            text: contactInfo,
-            size: 18, // 9pt
-            color: MUTED,
-            font: "Inter",
-          }),
-        ],
+        spacing: { before: 0, after: 200 },
+        shading: { type: ShadingType.SOLID, color: NAVY, fill: NAVY },
+        children: contactRuns,
       })
     );
   }
 
-  // ── Divider ──
-  children.push(horizontalRule());
+  children.push(
+    new Paragraph({
+      spacing: { before: 0, after: 0 },
+      shading: { type: ShadingType.SOLID, color: NAVY, fill: NAVY },
+      children: [
+        new TextRun({
+          text: " ",
+          size: 12,
+          color: NAVY,
+        }),
+      ],
+    })
+  );
 
-  // ── Summary ──
-  children.push(sectionTitle("SUMMARY"));
+  // Spacer
+  children.push(
+    new Paragraph({
+      spacing: { before: 160, after: 0 },
+      children: [],
+    })
+  );
+
+  // ── Professional Summary ──
+  children.push(accentSectionTitle("PROFESSIONAL SUMMARY"));
   children.push(
     new Paragraph({
       spacing: { after: 160 },
       children: [
         new TextRun({
           text: summaryStatement,
-          size: 19, // 9.5pt
+          size: 19,
           color: DARK,
           font: "Inter",
         }),
@@ -104,7 +166,7 @@ export async function buildResumeDocx(
 
   // ── Skills ──
   if (skillsSection.length > 0) {
-    children.push(sectionTitle("SKILLS"));
+    children.push(accentSectionTitle("SKILLS"));
 
     const skillRuns: TextRun[] = [];
     skillsSection.forEach((skill, i) => {
@@ -113,16 +175,17 @@ export async function buildResumeDocx(
           text: skill,
           bold: true,
           size: 18,
-          color: BODY,
+          color: SKILL_TEXT,
           font: "Inter",
+          shading: { type: ShadingType.SOLID, color: SKILL_BG, fill: SKILL_BG },
         })
       );
       if (i < skillsSection.length - 1) {
         skillRuns.push(
           new TextRun({
-            text: "  \u00B7  ",
+            text: "    ",
             size: 18,
-            color: MUTED,
+            color: BODY,
             font: "Inter",
           })
         );
@@ -139,13 +202,12 @@ export async function buildResumeDocx(
 
   // ── Experience ──
   if (experienceSection.length > 0) {
-    children.push(sectionTitle("EXPERIENCE"));
+    children.push(accentSectionTitle("EXPERIENCE"));
 
     for (const exp of experienceSection) {
-      // Company + Dates (right-aligned)
       children.push(
         new Paragraph({
-          spacing: { before: 100, after: 20 },
+          spacing: { before: 120, after: 20 },
           tabStops: [
             {
               type: TabStopType.RIGHT,
@@ -156,7 +218,7 @@ export async function buildResumeDocx(
             new TextRun({
               text: exp.company,
               bold: true,
-              size: 20, // 10pt
+              size: 21,
               color: BLACK,
               font: "Inter",
             }),
@@ -165,12 +227,12 @@ export async function buildResumeDocx(
               size: 17,
               color: MUTED,
               font: "Inter",
+              bold: true,
             }),
           ],
         })
       );
 
-      // Title
       children.push(
         new Paragraph({
           spacing: { after: 60 },
@@ -179,14 +241,13 @@ export async function buildResumeDocx(
               text: exp.title,
               bold: true,
               size: 19,
-              color: DARK,
+              color: ACCENT,
               font: "Inter",
             }),
           ],
         })
       );
 
-      // Bullets
       for (const bullet of exp.bullets) {
         children.push(
           new Paragraph({
@@ -195,7 +256,7 @@ export async function buildResumeDocx(
             children: [
               new TextRun({
                 text: bullet,
-                size: 19,
+                size: 18,
                 color: BODY,
                 font: "Inter",
               }),
@@ -208,7 +269,7 @@ export async function buildResumeDocx(
 
   // ── Education ──
   if (educationSection && educationSection.length > 0) {
-    children.push(sectionTitle("EDUCATION"));
+    children.push(accentSectionTitle("EDUCATION"));
 
     for (const edu of educationSection) {
       const degreeText =
@@ -218,7 +279,7 @@ export async function buildResumeDocx(
 
       children.push(
         new Paragraph({
-          spacing: { after: 20 },
+          spacing: { before: 60, after: 20 },
           tabStops: [
             {
               type: TabStopType.RIGHT,
@@ -265,7 +326,7 @@ export async function buildResumeDocx(
 
   // ── Certifications ──
   if (certificationsSection && certificationsSection.length > 0) {
-    children.push(sectionTitle("CERTIFICATIONS"));
+    children.push(accentSectionTitle("CERTIFICATIONS"));
 
     for (const cert of certificationsSection) {
       children.push(
@@ -273,8 +334,14 @@ export async function buildResumeDocx(
           spacing: { after: 40 },
           children: [
             new TextRun({
+              text: "\u25CF  ",
+              size: 16,
+              color: ACCENT,
+              font: "Inter",
+            }),
+            new TextRun({
               text: cert,
-              size: 19,
+              size: 18,
               color: BODY,
               font: "Inter",
             }),
@@ -304,18 +371,19 @@ export async function buildResumeDocx(
             {
               level: 0,
               format: "bullet",
-              text: "\u2022",
+              text: "\u25CF",
               alignment: AlignmentType.LEFT,
               style: {
                 paragraph: {
                   indent: {
-                    left: convertInchesToTwip(0.25),
-                    hanging: convertInchesToTwip(0.15),
+                    left: convertInchesToTwip(0.3),
+                    hanging: convertInchesToTwip(0.18),
                   },
                 },
                 run: {
-                  color: MUTED,
+                  color: ACCENT,
                   font: "Inter",
+                  size: 16,
                 },
               },
             },
@@ -332,10 +400,10 @@ export async function buildResumeDocx(
               height: convertInchesToTwip(11),
             },
             margin: {
-              top: convertInchesToTwip(0.55),
-              bottom: convertInchesToTwip(0.55),
-              left: convertInchesToTwip(0.55),
-              right: convertInchesToTwip(0.55),
+              top: convertInchesToTwip(0),
+              bottom: convertInchesToTwip(0.6),
+              left: convertInchesToTwip(0.7),
+              right: convertInchesToTwip(0.7),
             },
           },
         },
@@ -350,33 +418,26 @@ export async function buildResumeDocx(
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function sectionTitle(text: string): Paragraph {
+function accentSectionTitle(text: string): Paragraph {
   return new Paragraph({
-    spacing: { before: 200, after: 80 },
+    spacing: { before: 240, after: 100 },
+    border: {
+      bottom: {
+        color: BORDER,
+        space: 4,
+        style: BorderStyle.SINGLE,
+        size: 8,
+      },
+    },
     children: [
       new TextRun({
         text,
         bold: true,
-        size: 20, // 10pt
-        color: BLACK,
+        size: 22,
+        color: ACCENT,
         font: "Inter",
-        characterSpacing: 60, // ~1.5pt letter spacing
+        characterSpacing: 80,
       }),
     ],
-  });
-}
-
-function horizontalRule(): Paragraph {
-  return new Paragraph({
-    spacing: { after: 120 },
-    border: {
-      bottom: {
-        color: RULE,
-        space: 1,
-        style: BorderStyle.SINGLE,
-        size: 6,
-      },
-    },
-    children: [],
   });
 }
