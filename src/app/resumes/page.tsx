@@ -192,6 +192,10 @@ function ResumeWorkspace() {
   const [activeKitFilter, setActiveKitFilter] = useState<string | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
+  // ─── Score comparison state ────────────────────────────────────────
+  const [previousScores, setPreviousScores] = useState<{ ats: number | null; clarity: number | null; specificity: number | null } | null>(null);
+  const [showScoreComparison, setShowScoreComparison] = useState(false);
+
   // ─── Fetch resumes on mount ───────────────────────────────────────
 
   const fetchResumes = useCallback(async () => {
@@ -393,6 +397,13 @@ function ResumeWorkspace() {
     const resume = resumes[activeTab];
     if (!resume || rescoring) return;
 
+    // Save current scores for before/after comparison
+    setPreviousScores({
+      ats: resume.scores.ats,
+      clarity: resume.scores.clarity,
+      specificity: resume.scores.specificity,
+    });
+    setShowScoreComparison(false);
     setRescoring(true);
     setError(null);
 
@@ -437,6 +448,10 @@ function ResumeWorkspace() {
             : r
         )
       );
+
+      // Show before/after comparison and collapse suggestions
+      setShowScoreComparison(true);
+      setSuggestionsExpanded(false);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to re-score resume"
@@ -1126,6 +1141,38 @@ function ResumeWorkspace() {
                   generally
                 </p>
 
+                {/* Before/After comparison after re-score */}
+                {showScoreComparison && previousScores && (
+                  <div className="rounded-md border border-green-200 bg-green-50 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-green-800">Score updated!</p>
+                    {[
+                      { label: "ATS", prev: previousScores.ats, curr: currentResume.scores.ats },
+                      { label: "Clarity", prev: previousScores.clarity, curr: currentResume.scores.clarity },
+                      { label: "Specificity", prev: previousScores.specificity, curr: currentResume.scores.specificity },
+                    ].map(({ label, prev, curr }) => {
+                      const diff = (curr ?? 0) - (prev ?? 0);
+                      return (
+                        <div key={label} className="flex items-center justify-between text-xs">
+                          <span className="text-green-700">{label}</span>
+                          <span className="font-medium text-green-800">
+                            {prev ?? 0}% → {curr ?? 0}%
+                            {diff > 0 && <span className="ml-1 text-green-600">↑{diff}</span>}
+                            {diff < 0 && <span className="ml-1 text-red-500">↓{Math.abs(diff)}</span>}
+                            {diff === 0 && <span className="ml-1 text-gray-400">—</span>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setShowScoreComparison(false)}
+                      className="text-[10px] text-green-600 hover:text-green-800 mt-1"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
                 <ScoreGauge
                   label="ATS Strength"
                   score={currentResume.scores.ats}
@@ -1238,6 +1285,29 @@ function ResumeWorkspace() {
                 </div>
               </div>
 
+              {/* Optimization Opportunities (collapsible) */}
+              {((feedback?.missing_metrics && feedback.missing_metrics.length > 0) ||
+                (feedback?.weak_bullets && feedback.weak_bullets.length > 0) ||
+                (feedback?.suggestions && feedback.suggestions.length > 0)) && (
+                <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
+                    className="w-full flex items-center justify-between text-sm font-semibold text-text-primary"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      Optimization Opportunities
+                      <span className="ml-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-medium">
+                        {(feedback?.missing_metrics?.length ?? 0) + (feedback?.weak_bullets?.length ?? 0) + (feedback?.suggestions?.length ?? 0)}
+                      </span>
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 text-text-secondary transition-transform", suggestionsExpanded && "rotate-180")} />
+                  </button>
+
+                  {suggestionsExpanded && (
+                    <div className="space-y-4 pt-2">
+
               {/* Missing Metrics */}
               {feedback?.missing_metrics &&
                 feedback.missing_metrics.length > 0 && (
@@ -1342,6 +1412,11 @@ function ResumeWorkspace() {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+                    </div>
+                  )}
                 </div>
               )}
 
