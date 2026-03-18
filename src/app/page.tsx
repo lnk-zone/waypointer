@@ -508,26 +508,93 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── Pricing Teaser ─── */}
+      {/* ─── Pricing ─── */}
       <section id="pricing" className="rounded-t-[3rem] bg-slate-900 py-20 text-white lg:py-24">
-        <div className="mx-auto max-w-4xl px-4 text-center">
-          <h2 className="text-3xl font-bold md:text-4xl">
-            Practical pricing for broad rollout
-          </h2>
-          <p className="mx-auto mt-6 max-w-2xl text-xl leading-relaxed text-slate-400">
-            Traditional outplacement is priced to be exclusive. Waypointer is priced
-            to be inclusive. Simple per-seat pricing based on seats and support
-            duration — designed for fast approval and fast deployment.
-          </p>
-          <div className="mt-10">
-            <Button
-              size="lg"
-              asChild
-              className="rounded-xl bg-primary px-10 py-5 text-lg font-bold shadow-xl hover:bg-primary/90"
-            >
-              <Link href="/login">Talk to Sales</Link>
-            </Button>
+        <div className="mx-auto max-w-5xl px-4">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold md:text-4xl">
+              Simple volume-based pricing
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-400">
+              One plan. One price per seat. The more seats you purchase, the less you pay per person. Minimum 10 seats per order.
+            </p>
           </div>
+
+          <div className="mt-14 grid gap-6 md:grid-cols-3">
+            {/* Tier 1 */}
+            <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-8">
+              <p className="text-sm font-semibold uppercase tracking-wider text-slate-400">10 – 49 seats</p>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-5xl font-black">$179</span>
+                <span className="text-lg text-slate-400">/seat</span>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">90 days of access per employee</p>
+              <ul className="mt-8 space-y-3 text-sm text-slate-300">
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Full AI transition platform</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Resume, LinkedIn, jobs, interviews</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Employer outcomes dashboard</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Email support</li>
+              </ul>
+              <Button
+                size="lg"
+                asChild
+                className="mt-8 w-full rounded-xl bg-white/10 py-3 font-semibold text-white hover:bg-white/20"
+              >
+                <Link href="/login">Get Started</Link>
+              </Button>
+            </div>
+
+            {/* Tier 2 — highlighted */}
+            <div className="relative rounded-2xl border-2 border-primary bg-slate-800 p-8 shadow-lg shadow-primary/10">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-xs font-bold uppercase tracking-wider">Most Popular</div>
+              <p className="text-sm font-semibold uppercase tracking-wider text-slate-400">50 – 99 seats</p>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-5xl font-black">$149</span>
+                <span className="text-lg text-slate-400">/seat</span>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">90 days of access per employee</p>
+              <ul className="mt-8 space-y-3 text-sm text-slate-300">
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Everything in 10–49 tier</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Priority onboarding support</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Custom program branding</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Dedicated account manager</li>
+              </ul>
+              <Button
+                size="lg"
+                asChild
+                className="mt-8 w-full rounded-xl bg-primary py-3 font-bold text-white shadow-xl hover:bg-primary/90"
+              >
+                <Link href="/login">Get Started</Link>
+              </Button>
+            </div>
+
+            {/* Tier 3 */}
+            <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-8">
+              <p className="text-sm font-semibold uppercase tracking-wider text-slate-400">100+ seats</p>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-5xl font-black">$129</span>
+                <span className="text-lg text-slate-400">/seat</span>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">90 days of access per employee</p>
+              <ul className="mt-8 space-y-3 text-sm text-slate-300">
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Everything in 50–99 tier</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Volume discount locked in</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>Custom SLA available</li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span>API access for HR systems</li>
+              </ul>
+              <Button
+                size="lg"
+                asChild
+                className="mt-8 w-full rounded-xl bg-white/10 py-3 font-semibold text-white hover:bg-white/20"
+              >
+                <Link href="/login">Contact Sales</Link>
+              </Button>
+            </div>
+          </div>
+
+          <p className="mt-8 text-center text-sm text-slate-500">
+            All plans include 90 days of platform access from employee activation. Unused seats expire 12 months from purchase.
+          </p>
         </div>
       </section>
 
