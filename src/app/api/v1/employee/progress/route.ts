@@ -163,11 +163,12 @@ export async function GET(request: NextRequest) {
         .from("resumes")
         .select("id", { count: "exact", head: true })
         .eq("employee_id", employee.id),
-      // LinkedIn updated
+      // LinkedIn updated — check linkedin_content.is_marked_updated
       supabase
-        .from("linkedin_profiles")
+        .from("linkedin_content")
         .select("id", { count: "exact", head: true })
-        .eq("employee_id", employee.id),
+        .eq("employee_id", employee.id)
+        .eq("is_marked_updated", true),
       // Applications tracked
       supabase
         .from("job_matches")
@@ -292,6 +293,11 @@ export async function GET(request: NextRequest) {
                 firstResumeResult.data[0] as unknown as { created_at: string }
               ).created_at
             : null,
+      },
+      {
+        name: "LinkedIn updated",
+        achieved: linkedinUpdated,
+        achieved_at: linkedinUpdated ? new Date().toISOString() : null,
       },
       {
         name: "First application",
