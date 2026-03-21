@@ -78,7 +78,8 @@ interface BehavioralQuestion {
 
 interface TechnicalQuestion {
   question: string;
-  talking_points: string[];
+  suggested_answer: string;
+  talking_points?: string[];
   tip?: string;
 }
 
@@ -93,17 +94,19 @@ interface PrepGuideData {
   company_name: string;
   interview_stage: string;
   format: string;
-  created_at: string;
+  created_at?: string;
   interviewer_lenses: InterviewerLens[];
   alignments: Alignment[];
-  gaps: Gap[];
+  gaps_to_address: Gap[];
   opening_statement: string;
   closing_statement: string;
   behavioral_questions: BehavioralQuestion[];
   technical_questions: TechnicalQuestion[];
-  smart_questions: SmartQuestion[];
-  day_before_checklist: string[];
-  day_of_checklist: string[];
+  smart_questions_to_ask: SmartQuestion[];
+  preparation_checklist: {
+    day_before: string[];
+    day_of: string[];
+  };
 }
 
 interface SavedPrepSummary {
@@ -1131,14 +1134,14 @@ function InterviewsContent() {
             )}
 
             {/* Section 3: The Gap(s) to Address */}
-            {prepData.gaps && prepData.gaps.length > 0 && (
+            {prepData.gaps_to_address && prepData.gaps_to_address.length > 0 && (
               <ResultSection
                 icon={<AlertTriangle className="h-4 w-4" />}
                 title="The Gap(s) to Address"
                 sectionNumber={3}
               >
                 <div className="space-y-3">
-                  {prepData.gaps.map((gap, i) => (
+                  {prepData.gaps_to_address.map((gap, i) => (
                     <div
                       key={i}
                       className="rounded-sm border border-[#D97706]/20 bg-[#D97706]/5 p-4"
@@ -1307,19 +1310,26 @@ function InterviewsContent() {
                           </button>
                           {isExpanded && (
                             <div className="px-4 pb-4 pt-0 ml-8 space-y-3">
-                              <ul className="space-y-1.5">
-                                {q.talking_points.map((point, j) => (
-                                  <li
-                                    key={j}
-                                    className="flex items-start gap-2 text-sm text-text-primary"
-                                  >
-                                    <span className="text-primary mt-1 flex-shrink-0">
-                                      &bull;
-                                    </span>
-                                    {point}
-                                  </li>
-                                ))}
-                              </ul>
+                              {q.suggested_answer && (
+                                <p className="text-sm text-text-primary leading-relaxed">
+                                  {q.suggested_answer}
+                                </p>
+                              )}
+                              {q.talking_points && q.talking_points.length > 0 && (
+                                <ul className="space-y-1.5">
+                                  {q.talking_points.map((point, j) => (
+                                    <li
+                                      key={j}
+                                      className="flex items-start gap-2 text-sm text-text-primary"
+                                    >
+                                      <span className="text-primary mt-1 flex-shrink-0">
+                                        &bull;
+                                      </span>
+                                      {point}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                               {q.tip && (
                                 <div className="rounded-sm bg-yellow-50 border border-yellow-100 p-3">
                                   <p className="text-xs font-medium text-yellow-800">
@@ -1337,38 +1347,38 @@ function InterviewsContent() {
               )}
 
             {/* Section 7: Smart Questions to Ask */}
-            {prepData.smart_questions &&
-              prepData.smart_questions.length > 0 && (
+            {prepData.smart_questions_to_ask &&
+              prepData.smart_questions_to_ask.length > 0 && (
                 <ResultSection
                   icon={<Lightbulb className="h-4 w-4" />}
                   title="Smart Questions to Ask"
                   sectionNumber={7}
                 >
                   <SmartQuestionsSection
-                    questions={prepData.smart_questions}
+                    questions={prepData.smart_questions_to_ask}
                   />
                 </ResultSection>
               )}
 
             {/* Section 8: Final Preparation Checklist */}
-            {((prepData.day_before_checklist &&
-              prepData.day_before_checklist.length > 0) ||
-              (prepData.day_of_checklist &&
-                prepData.day_of_checklist.length > 0)) && (
+            {((prepData.preparation_checklist?.day_before &&
+              prepData.preparation_checklist?.day_before.length > 0) ||
+              (prepData.preparation_checklist?.day_of &&
+                prepData.preparation_checklist?.day_of.length > 0)) && (
               <ResultSection
                 icon={<CheckSquare className="h-4 w-4" />}
                 title="Final Preparation Checklist"
                 sectionNumber={8}
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {prepData.day_before_checklist &&
-                    prepData.day_before_checklist.length > 0 && (
+                  {prepData.preparation_checklist?.day_before &&
+                    prepData.preparation_checklist?.day_before.length > 0 && (
                       <div>
                         <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
                           Day Before
                         </p>
                         <div className="space-y-2">
-                          {prepData.day_before_checklist.map((item, i) => (
+                          {prepData.preparation_checklist?.day_before.map((item, i) => (
                             <div
                               key={i}
                               className="flex items-start gap-2.5 p-2"
@@ -1382,14 +1392,14 @@ function InterviewsContent() {
                         </div>
                       </div>
                     )}
-                  {prepData.day_of_checklist &&
-                    prepData.day_of_checklist.length > 0 && (
+                  {prepData.preparation_checklist?.day_of &&
+                    prepData.preparation_checklist?.day_of.length > 0 && (
                       <div>
                         <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
                           Day Of
                         </p>
                         <div className="space-y-2">
-                          {prepData.day_of_checklist.map((item, i) => (
+                          {prepData.preparation_checklist?.day_of.map((item, i) => (
                             <div
                               key={i}
                               className="flex items-start gap-2.5 p-2"
