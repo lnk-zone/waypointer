@@ -332,17 +332,15 @@ export const gapSchema = z.object({
   bridging_strategy: z.string().min(1),
 });
 
-export const starAnswerSchema = z.object({
+export const behavioralQuestionSchema = z.object({
   question: z.string().min(1),
-  situation: z.string().min(1),
-  action: z.string().min(1),
-  result: z.string().min(1),
+  suggested_answer: z.string().min(1),
   tip: z.string().optional(),
 });
 
 export const technicalQuestionSchema = z.object({
   question: z.string().min(1),
-  talking_points: z.array(z.string().min(1)).min(2).max(6),
+  suggested_answer: z.string().min(1),
   tip: z.string().optional(),
 });
 
@@ -355,15 +353,15 @@ export const smartQuestionSchema = z.object({
 
 export const generateInterviewPrepSchema = z.object({
   interviewer_lenses: z.array(interviewerLensSchema),
-  alignments: z.array(alignmentSchema).min(3).max(8),
+  alignments: z.array(alignmentSchema).min(2).max(8),
   gaps_to_address: z.array(gapSchema).min(1).max(3),
   opening_statement: z.string().min(1),
   closing_statement: z.string().min(1),
-  behavioral_questions: z.array(starAnswerSchema).min(5).max(8),
-  technical_questions: z.array(technicalQuestionSchema).min(3).max(6),
-  smart_questions_to_ask: z.array(smartQuestionSchema).min(3).max(6),
+  behavioral_questions: z.array(behavioralQuestionSchema).min(3).max(6),
+  technical_questions: z.array(technicalQuestionSchema).min(2).max(5),
+  smart_questions_to_ask: z.array(smartQuestionSchema).min(2).max(6),
   preparation_checklist: z.object({
-    day_before: z.array(z.string().min(1)).min(3).max(6),
+    day_before: z.array(z.string().min(1)).min(2).max(6),
     day_of: z.array(z.string().min(1)).min(2).max(4),
   }),
 });
