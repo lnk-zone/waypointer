@@ -334,7 +334,9 @@ export const gapSchema = z.object({
 
 export const behavioralQuestionSchema = z.object({
   question: z.string().min(1),
-  suggested_answer: z.string().min(1),
+  situation: z.string().min(1),
+  action: z.string().min(1),
+  result: z.string().min(1),
   tip: z.string().optional(),
 });
 
