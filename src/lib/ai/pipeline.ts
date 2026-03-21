@@ -18,7 +18,6 @@ import type { PromptRegistryRow, AIModelConfig, AICallLog } from "@/types/ai";
 
 // ─── Constants ──────────────────────────────────────────────────────────
 
-export const AI_TIMEOUT_MS = 30_000;
 export const AI_MAX_CONCURRENT_PER_SESSION = 5;
 
 /** Correction nudge appended on retry when structured output parsing fails */
@@ -194,20 +193,14 @@ export async function callClaude(
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const client = getAnthropicClient();
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-
   try {
-    const response = await client.messages.create(
-      {
-        model: config.model,
-        max_tokens: config.maxTokens,
-        temperature: config.temperature,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      },
-      { signal: controller.signal }
-    );
+    const response = await client.messages.create({
+      model: config.model,
+      max_tokens: config.maxTokens,
+      temperature: config.temperature,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
 
     // Extract text from the response content blocks
     const textContent = response.content.find(
@@ -229,24 +222,11 @@ export async function callClaude(
   } catch (err) {
     if (err instanceof AIError) throw err;
 
-    if (
-      err instanceof Error &&
-      (err.name === "AbortError" || err.message.includes("abort"))
-    ) {
-      throw new AIError(
-        "AI call timed out after 30 seconds",
-        "AI_TIMEOUT",
-        "unknown"
-      );
-    }
-
     throw new AIError(
       err instanceof Error ? err.message : "Unknown Claude API error",
       "AI_API_ERROR",
       "unknown"
     );
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
