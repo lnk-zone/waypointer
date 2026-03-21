@@ -75,7 +75,6 @@ export async function ingestJobListings(
       requirements: listing.requirements,
       posted_at: listing.posted_at,
       source_url: listing.source_url,
-      employer_website: listing.employer_website,
       is_active: true,
       updated_at: new Date().toISOString(),
     }));

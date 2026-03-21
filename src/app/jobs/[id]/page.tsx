@@ -18,7 +18,6 @@ import {
   ExternalLink,
   FileText,
   Lightbulb,
-  Loader2,
   MapPin,
   MessageSquare,
   Mic,
@@ -174,14 +173,6 @@ function JobDetailContent() {
   // Resume match refresh state
   const [refreshingScore, setRefreshingScore] = useState(false);
 
-  // Direct link resolver state
-  const [resolvedLink, setResolvedLink] = useState<{
-    direct_url: string;
-    is_direct: boolean;
-    confidence: string;
-  } | null>(null);
-  const [resolving, setResolving] = useState(false);
-
   // Fetch all detail data from the new consolidated endpoint
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -211,20 +202,6 @@ function JobDetailContent() {
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
-
-  // Resolve direct application link
-  useEffect(() => {
-    if (!matchId || !match?.job_listings?.source_url) return;
-
-    setResolving(true);
-    fetch(`/api/v1/employee/jobs/${matchId}/resolve`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (json?.data) setResolvedLink(json.data);
-      })
-      .catch(() => {})
-      .finally(() => setResolving(false));
-  }, [matchId, match?.job_listings?.source_url]);
 
   // Track as applied
   const handleTrackApplied = async () => {
@@ -680,45 +657,16 @@ function JobDetailContent() {
             </h2>
 
             {/* Apply externally */}
-            {(resolvedLink?.direct_url || listing.source_url) && (
+            {listing.source_url && (
               <a
-                href={resolvedLink?.direct_url || listing.source_url || "#"}
+                href={listing.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={cn(
-                  "flex items-center justify-center gap-2 w-full rounded-sm px-4 py-2.5 text-sm font-medium transition-default",
-                  resolvedLink?.is_direct !== false
-                    ? "bg-primary text-white hover:bg-[#1D4ED8]"
-                    : "border border-border bg-surface text-text-primary hover:bg-gray-50"
-                )}
+                className="flex items-center justify-center gap-2 w-full rounded-sm bg-primary text-white px-4 py-2.5 text-sm font-medium hover:bg-[#1D4ED8] transition-default"
               >
-                {resolving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Resolving direct link...
-                  </>
-                ) : resolvedLink?.is_direct ? (
-                  <>
-                    <ExternalLink className="h-4 w-4" />
-                    Apply Now
-                  </>
-                ) : resolvedLink?.is_direct === false ? (
-                  <>
-                    <ExternalLink className="h-4 w-4" />
-                    View on Job Board
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="h-4 w-4" />
-                    Apply on Company Site
-                  </>
-                )}
+                <ExternalLink className="h-4 w-4" />
+                Apply on Company Site
               </a>
-            )}
-            {resolvedLink?.is_direct === false && !resolving && (
-              <p className="text-xs text-muted text-center">
-                We couldn&apos;t find a direct application link. This may require registration on a third-party site.
-              </p>
             )}
 
             {/* Track as applied -- only when no application or saved */}

@@ -30,7 +30,6 @@ const jSearchJobSchema = z.object({
   job_salary_period: z.string().nullable().optional(),
   job_posted_at_datetime_utc: z.string().nullable().optional(),
   job_apply_link: z.string().nullable().optional(),
-  employer_website: z.string().nullable().optional(),
   job_highlights: z
     .object({
       Qualifications: z.array(z.string()).optional(),
@@ -108,7 +107,6 @@ function normalizeJob(job: JSearchJob): JobListing {
     requirements,
     posted_at: job.job_posted_at_datetime_utc ?? null,
     source_url: job.job_apply_link ?? null,
-    employer_website: job.employer_website ?? null,
   };
 }
 

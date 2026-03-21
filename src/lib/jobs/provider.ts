@@ -26,7 +26,6 @@ export interface JobListing {
   requirements: string[];
   posted_at: string | null;
   source_url: string | null;
-  employer_website: string | null;
 }
 
 /**
