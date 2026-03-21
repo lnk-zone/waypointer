@@ -8,7 +8,7 @@
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 90;
 
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -26,8 +26,10 @@ import {
 } from "@/lib/api/paths-helpers";
 import { executeAIPipeline } from "@/lib/ai/pipeline";
 import {
-  generateInterviewPrepSchema,
-  type GenerateInterviewPrepOutput,
+  interviewPrepOverviewSchema,
+  interviewPrepQuestionsSchema,
+  type InterviewPrepOverviewOutput,
+  type InterviewPrepQuestionsOutput,
 } from "@/lib/validators/ai";
 
 // ─── Request Schemas ────────────────────────────────────────────────
@@ -177,7 +179,7 @@ export async function POST(request: NextRequest) {
       .eq("job_description_hash", jobDescriptionHash);
   }
 
-  // ─── AI Generation ────────────────────────────────────────────
+  // ─── AI Generation (two parallel calls) ─────────────────────
 
   const context = await assemblePathContext(supabase, employee, snapshotId);
 
@@ -190,14 +192,28 @@ export async function POST(request: NextRequest) {
     interview_format: format,
   };
 
-  let aiResult: GenerateInterviewPrepOutput;
+  let overviewResult: InterviewPrepOverviewOutput;
+  let questionsResult: InterviewPrepQuestionsOutput;
+
   try {
-    aiResult = await executeAIPipeline(
-      "GENERATE_INTERVIEW_PREP",
-      variables,
-      generateInterviewPrepSchema,
-      auth.user.id
-    );
+    // Fire both AI calls in parallel — each stays under 60s
+    const [overview, questions] = await Promise.all([
+      executeAIPipeline(
+        "INTERVIEW_PREP_OVERVIEW",
+        variables,
+        interviewPrepOverviewSchema,
+        auth.user.id
+      ),
+      executeAIPipeline(
+        "INTERVIEW_PREP_QUESTIONS",
+        variables,
+        interviewPrepQuestionsSchema,
+        auth.user.id
+      ),
+    ]);
+
+    overviewResult = overview;
+    questionsResult = questions;
   } catch (err) {
     return apiError(
       ERROR_CODES.AI_ERROR,
@@ -214,15 +230,15 @@ export async function POST(request: NextRequest) {
     company_name: companyName || null,
     interview_stage: interviewStage ?? null,
     format,
-    interviewer_lenses: aiResult.interviewer_lenses,
-    alignments: aiResult.alignments,
-    gaps_to_address: aiResult.gaps_to_address,
-    opening_statement: aiResult.opening_statement,
-    closing_statement: aiResult.closing_statement,
-    behavioral_questions: aiResult.behavioral_questions,
-    technical_questions: aiResult.technical_questions,
-    smart_questions_to_ask: aiResult.smart_questions_to_ask,
-    preparation_checklist: aiResult.preparation_checklist,
+    interviewer_lenses: overviewResult.interviewer_lenses,
+    alignments: overviewResult.alignments,
+    gaps_to_address: overviewResult.gaps_to_address,
+    opening_statement: overviewResult.opening_statement,
+    closing_statement: overviewResult.closing_statement,
+    behavioral_questions: questionsResult.behavioral_questions,
+    technical_questions: questionsResult.technical_questions,
+    smart_questions_to_ask: overviewResult.smart_questions_to_ask,
+    preparation_checklist: overviewResult.preparation_checklist,
   };
 
   // ─── Persist to cache ─────────────────────────────────────────

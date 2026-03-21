@@ -351,22 +351,34 @@ export const smartQuestionSchema = z.object({
   question: z.string().min(1),
 });
 
-// ─── GENERATE_INTERVIEW_PREP (PR Prompt 14) ─────────────────────────
+// ─── GENERATE_INTERVIEW_PREP — Split into two phases ─────────────────
 
-export const generateInterviewPrepSchema = z.object({
+// Phase 1: Overview (interviewer lenses, alignments, gaps, statements, checklist, smart questions)
+export const interviewPrepOverviewSchema = z.object({
   interviewer_lenses: z.array(interviewerLensSchema),
   alignments: z.array(alignmentSchema).min(2).max(8),
   gaps_to_address: z.array(gapSchema).min(1).max(3),
   opening_statement: z.string().min(1),
   closing_statement: z.string().min(1),
-  behavioral_questions: z.array(behavioralQuestionSchema).min(3).max(6),
-  technical_questions: z.array(technicalQuestionSchema).min(2).max(5),
   smart_questions_to_ask: z.array(smartQuestionSchema).min(2).max(6),
   preparation_checklist: z.object({
     day_before: z.array(z.string().min(1)).min(2).max(6),
     day_of: z.array(z.string().min(1)).min(2).max(4),
   }),
 });
+
+export type InterviewPrepOverviewOutput = z.infer<typeof interviewPrepOverviewSchema>;
+
+// Phase 2: Questions (behavioral STAR + technical)
+export const interviewPrepQuestionsSchema = z.object({
+  behavioral_questions: z.array(behavioralQuestionSchema).min(3).max(6),
+  technical_questions: z.array(technicalQuestionSchema).min(2).max(5),
+});
+
+export type InterviewPrepQuestionsOutput = z.infer<typeof interviewPrepQuestionsSchema>;
+
+// Combined type for the full prep guide (used by cache and frontend)
+export const generateInterviewPrepSchema = interviewPrepOverviewSchema.merge(interviewPrepQuestionsSchema);
 
 export type GenerateInterviewPrepOutput = z.infer<
   typeof generateInterviewPrepSchema
