@@ -314,20 +314,58 @@ export const generateOutreachSchema = z.object({
 export type OutreachGuidance = z.infer<typeof outreachGuidanceSchema>;
 export type GenerateOutreachOutput = z.infer<typeof generateOutreachSchema>;
 
-// ─── GENERATE_INTERVIEW_PREP (PR Prompt 14) ─────────────────────────
+// ─── Sub-schemas for interview prep sections ────────────────────────
 
-const interviewQuestionSchema = z.object({
-  question: z.string().min(1),
-  suggested_answer: z.string().min(1),
+export const interviewerLensSchema = z.object({
+  title: z.string().min(1),
+  focus: z.string().min(1),
+  they_want_to_know: z.array(z.string().min(1)).min(2).max(5),
 });
 
+export const alignmentSchema = z.object({
+  your_experience: z.string().min(1),
+  jd_requirement: z.string().min(1),
+});
+
+export const gapSchema = z.object({
+  gap: z.string().min(1),
+  bridging_strategy: z.string().min(1),
+});
+
+export const starAnswerSchema = z.object({
+  question: z.string().min(1),
+  situation: z.string().min(1),
+  action: z.string().min(1),
+  result: z.string().min(1),
+  tip: z.string().optional(),
+});
+
+export const technicalQuestionSchema = z.object({
+  question: z.string().min(1),
+  talking_points: z.array(z.string().min(1)).min(2).max(6),
+  tip: z.string().optional(),
+});
+
+export const smartQuestionSchema = z.object({
+  for_interviewer: z.string().optional(),
+  question: z.string().min(1),
+});
+
+// ─── GENERATE_INTERVIEW_PREP (PR Prompt 14) ─────────────────────────
+
 export const generateInterviewPrepSchema = z.object({
-  common_questions: z.array(interviewQuestionSchema).min(5).max(8),
-  behavioral_questions: z.array(interviewQuestionSchema).min(5).max(8),
-  company_specific: z.array(interviewQuestionSchema).max(5),
-  strengths_to_emphasize: z.array(z.string().min(1)).min(3).max(5),
-  weak_spots_to_prepare: z.array(z.string().min(1)).min(2).max(3),
-  compensation_prep: z.string().min(1),
+  interviewer_lenses: z.array(interviewerLensSchema),
+  alignments: z.array(alignmentSchema).min(3).max(8),
+  gaps_to_address: z.array(gapSchema).min(1).max(3),
+  opening_statement: z.string().min(1),
+  closing_statement: z.string().min(1),
+  behavioral_questions: z.array(starAnswerSchema).min(5).max(8),
+  technical_questions: z.array(technicalQuestionSchema).min(3).max(6),
+  smart_questions_to_ask: z.array(smartQuestionSchema).min(3).max(6),
+  preparation_checklist: z.object({
+    day_before: z.array(z.string().min(1)).min(3).max(6),
+    day_of: z.array(z.string().min(1)).min(2).max(4),
+  }),
 });
 
 export type GenerateInterviewPrepOutput = z.infer<

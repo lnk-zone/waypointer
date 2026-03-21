@@ -26,7 +26,8 @@ import { z } from "zod";
 // ─── Request Validation ───────────────────────────────────────────────
 
 const startSessionSchema = z.object({
-  role_path_id: z.string().uuid(),
+  role_path_id: z.string().uuid().optional(),
+  prep_id: z.string().uuid().optional(),
   job_match_id: z.string().uuid().optional(),
   format: z.enum(["behavioral", "technical", "mixed"]),
   difficulty: z.enum(["standard", "challenging"]),
@@ -76,18 +77,83 @@ export async function POST(request: NextRequest) {
     return apiError(ERROR_CODES.NOT_FOUND, "Employee profile not found");
   }
 
-  // Get the role path (must belong to the employee)
-  const { data: rolePath, error: pathError } = await supabase
-    .from("role_paths")
-    .select("id, title")
-    .eq("id", input.role_path_id)
-    .eq("employee_id", employee.id)
-    .single();
+  // Resolve role path title — either from role_paths table or prep content
+  let rolePathId: string | null = input.role_path_id ?? null;
+  let rolePathTitle = "";
 
-  if (pathError || !rolePath) {
+  // When prep_id is provided, fetch the prep guide and extract questions from it
+  let prepQuestionsText = "";
+  let prepJobTitle = "";
+
+  if (input.prep_id) {
+    const { data: prepRow, error: prepError } = await supabase
+      .from("interview_prep")
+      .select("id, content, job_title")
+      .eq("id", input.prep_id)
+      .eq("employee_id", employee.id)
+      .single();
+
+    if (prepError || !prepRow) {
+      return apiError(
+        ERROR_CODES.NOT_FOUND,
+        "Interview prep guide not found. Please generate a prep guide first."
+      );
+    }
+
+    prepJobTitle = (prepRow.job_title as string) ?? "";
+
+    const content = prepRow.content as Record<string, unknown>;
+    const extractQuestions = (items: unknown[]): string[] =>
+      items.map((item) =>
+        typeof item === "object" && item !== null && "question" in item
+          ? (item as { question: string }).question
+          : String(item)
+      );
+
+    const allQuestions: string[] = [];
+    if (Array.isArray(content.behavioral_questions)) {
+      allQuestions.push(...extractQuestions(content.behavioral_questions));
+    }
+    if (Array.isArray(content.technical_questions)) {
+      allQuestions.push(...extractQuestions(content.technical_questions));
+    }
+
+    if (allQuestions.length > 0) {
+      prepQuestionsText = allQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n");
+    }
+
+    // Use prep job_title as fallback for role context
+    if (!prepJobTitle && typeof content.job_title === "string") {
+      prepJobTitle = content.job_title;
+    }
+  }
+
+  // Get the role path if role_path_id is provided
+  if (input.role_path_id) {
+    const { data: rolePath, error: pathError } = await supabase
+      .from("role_paths")
+      .select("id, title")
+      .eq("id", input.role_path_id)
+      .eq("employee_id", employee.id)
+      .single();
+
+    if (pathError || !rolePath) {
+      return apiError(
+        ERROR_CODES.NOT_FOUND,
+        "Role path not found. Select a valid role path and try again."
+      );
+    }
+
+    rolePathId = rolePath.id as string;
+    rolePathTitle = rolePath.title as string;
+  } else if (input.prep_id) {
+    // No role_path_id but we have a prep — use the prep's job_title
+    rolePathTitle = prepJobTitle || "General Interview";
+  } else {
+    // Neither prep_id nor role_path_id — cannot proceed
     return apiError(
-      ERROR_CODES.NOT_FOUND,
-      "Role path not found. Select a valid role path and try again."
+      ERROR_CODES.VALIDATION_ERROR,
+      "Either role_path_id or prep_id is required to start an interview session."
     );
   }
 
@@ -129,9 +195,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Fetch prep questions so the mock interview asks the SAME questions
-  let prepQuestionsText = "";
-  {
+  // When prep_id was NOT provided, fall back to the old behavior:
+  // fetch prep questions by role_path_id + optional job_match_id
+  if (!input.prep_id && input.role_path_id) {
     let prepQuery = supabase
       .from("interview_prep")
       .select("content")
@@ -174,7 +240,7 @@ export async function POST(request: NextRequest) {
 
   // Inject variables into the persona prompt template
   const variables: Record<string, string> = {
-    role_path_title: rolePath.title,
+    role_path_title: rolePathTitle,
     interview_format: input.format,
     interview_difficulty: input.difficulty,
     duration_minutes: String(input.duration_minutes),
@@ -205,7 +271,7 @@ export async function POST(request: NextRequest) {
     const elevenlabs = createElevenLabsClient();
 
     const agentResponse = await elevenlabs.conversationalAi.agents.create({
-      name: `Waypointer Interview - ${rolePath.title}`,
+      name: `Waypointer Interview - ${rolePathTitle}`,
       conversationConfig: {
         agent: {
           prompt: { prompt: personaPrompt },
@@ -242,7 +308,7 @@ export async function POST(request: NextRequest) {
     .from("interview_sessions")
     .insert({
       employee_id: employee.id,
-      role_path_id: input.role_path_id,
+      role_path_id: rolePathId,
       job_match_id: input.job_match_id ?? null,
       format: input.format,
       difficulty: input.difficulty,
@@ -267,7 +333,7 @@ export async function POST(request: NextRequest) {
       action: "interview_started",
       metadata: {
         session_id: session.id,
-        role_path_title: rolePath.title,
+        role_path_title: rolePathTitle,
         format: input.format,
         difficulty: input.difficulty,
         duration_minutes: input.duration_minutes,

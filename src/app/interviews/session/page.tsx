@@ -141,6 +141,7 @@ function SessionContent() {
 
   // Parse config from URL
   const pathId = searchParams.get("path_id") ?? "";
+  const prepId = searchParams.get("prep_id") ?? undefined;
   const format = (searchParams.get("format") ?? "behavioral") as
     | "behavioral"
     | "technical"
@@ -261,8 +262,8 @@ function SessionContent() {
   // ─── Start Session ─────────────────────────────────────────────────
 
   const startSession = useCallback(async () => {
-    if (!pathId) {
-      setError("No role path selected. Please go back and configure your interview.");
+    if (!pathId && !prepId) {
+      setError("No role path or prep guide selected. Please go back and configure your interview.");
       setSessionState("error");
       return;
     }
@@ -293,7 +294,8 @@ function SessionContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          role_path_id: pathId,
+          ...(pathId ? { role_path_id: pathId } : {}),
+          ...(prepId ? { prep_id: prepId } : {}),
           job_match_id: jobMatchId || undefined,
           format,
           difficulty,
@@ -508,6 +510,7 @@ function SessionContent() {
     };
   }, [
     pathId,
+    prepId,
     jobMatchId,
     format,
     difficulty,

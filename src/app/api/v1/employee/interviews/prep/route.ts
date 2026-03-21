@@ -1,20 +1,18 @@
 /**
- * GET /api/v1/employee/interviews/prep
+ * /api/v1/employee/interviews/prep
  *
- * Generates role-specific interview preparation materials using the
- * GENERATE_INTERVIEW_PREP AI pipeline (PR Prompt 14).
- * Caches results in the interview_prep table to avoid redundant AI calls.
- *
- * Query params:
- *   path_id       — UUID of the target role path (optional; defaults to primary)
- *   job_match_id  — UUID of a specific job match for company-specific prep (optional)
- *   regenerate    — "true" to force AI regeneration and overwrite cache
+ * POST — Generate new interview prep from a job description (or job_match_id).
+ *         Caches by SHA-256 hash of (job_description + stage + format).
+ * GET  — List all preps (`?list=true`) or fetch a single prep (`?prep_id=UUID`).
+ * DELETE — Remove a prep by ID.
  */
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import {
   authenticateRequest,
   isAuthError,
@@ -32,47 +30,68 @@ import {
   type GenerateInterviewPrepOutput,
 } from "@/lib/validators/ai";
 
-// ─── Types ───────────────────────────────────────────────────────────
+// ─── Request Schemas ────────────────────────────────────────────────
 
-interface RolePathRow {
-  id: string;
-  title: string;
-  is_primary: boolean;
-}
+const prepRequestSchema = z.object({
+  job_description: z.string().min(50, "Job description must be at least 50 characters"),
+  job_match_id: z.string().uuid().optional(),
+  interviewer_titles: z.array(z.string()).max(5).optional(),
+  interview_stage: z
+    .enum(["phone_screen", "first_round", "second_round", "final_round"])
+    .optional(),
+  format: z.enum(["behavioral", "technical", "mixed"]).default("mixed"),
+  regenerate: z.boolean().default(false),
+});
+
+const deleteRequestSchema = z.object({
+  prep_id: z.string().uuid(),
+});
+
+// ─── Types ──────────────────────────────────────────────────────────
 
 interface JobMatchRow {
   id: string;
   job_listings: {
     title: string;
     company_name: string;
-    description: string | null;
+    description_full: string | null;
   };
 }
 
-interface InterviewPrepRow {
-  id: string;
-  employee_id: string;
-  role_path_id: string;
-  job_match_id: string | null;
-  content: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
+// ─── POST Handler ───────────────────────────────────────────────────
 
-// ─── Route Handler ───────────────────────────────────────────────────
-
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if (isAuthError(auth)) return auth;
 
   const roleError = requireEmployee(auth);
   if (roleError) return roleError;
 
+  // Parse and validate body
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid JSON body");
+  }
+
+  const parsed = prepRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid request body", {
+      issues: parsed.error.issues,
+    });
+  }
+
+  const {
+    job_description: userJobDescription,
+    job_match_id: jobMatchId,
+    interviewer_titles: interviewerTitles,
+    interview_stage: interviewStage,
+    format,
+    regenerate,
+  } = parsed.data;
+
   const supabase = createServiceClient();
-  const searchParams = request.nextUrl.searchParams;
-  const pathId = searchParams.get("path_id");
-  const jobMatchId = searchParams.get("job_match_id");
-  const regenerate = searchParams.get("regenerate") === "true";
 
   // Get employee and snapshot
   const {
@@ -88,128 +107,90 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Get the target role path
-  let rolePath: RolePathRow | null = null;
-
-  if (pathId) {
-    const { data: rawPath } = await supabase
-      .from("role_paths")
-      .select("id, title, is_primary")
-      .eq("id", pathId)
-      .eq("employee_id", employee.id)
-      .single();
-
-    rolePath = rawPath as unknown as RolePathRow | null;
-  } else {
-    // Default to primary path
-    const { data: rawPath } = await supabase
-      .from("role_paths")
-      .select("id, title, is_primary")
-      .eq("employee_id", employee.id)
-      .eq("is_primary", true)
-      .single();
-
-    rolePath = rawPath as unknown as RolePathRow | null;
-  }
-
-  if (!rolePath) {
-    return apiError(
-      ERROR_CODES.NOT_FOUND,
-      "No role path found. Complete role targeting first."
-    );
-  }
-
-  const resolvedPathId = rolePath.id;
-
-  // ─── Cache Check ─────────────────────────────────────────────────
-
-  if (!regenerate) {
-    let cacheQuery = supabase
-      .from("interview_prep")
-      .select("*")
-      .eq("employee_id", employee.id)
-      .eq("role_path_id", resolvedPathId);
-
-    if (jobMatchId) {
-      cacheQuery = cacheQuery.eq("job_match_id", jobMatchId);
-    } else {
-      cacheQuery = cacheQuery.is("job_match_id", null);
-    }
-
-    const { data: cached } = await cacheQuery.single();
-
-    if (cached) {
-      const row = cached as unknown as InterviewPrepRow;
-      return NextResponse.json({ data: row.content, cached: true });
-    }
-  }
-
-  // ─── Delete existing cache if regenerating ───────────────────────
-
-  if (regenerate) {
-    let deleteQuery = supabase
-      .from("interview_prep")
-      .delete()
-      .eq("employee_id", employee.id)
-      .eq("role_path_id", resolvedPathId);
-
-    if (jobMatchId) {
-      deleteQuery = deleteQuery.eq("job_match_id", jobMatchId);
-    } else {
-      deleteQuery = deleteQuery.is("job_match_id", null);
-    }
-
-    await deleteQuery;
-  }
-
-  // ─── AI Generation ───────────────────────────────────────────────
-
-  // Get the full role path details for the prompt
-  const { data: rawPathDetails } = await supabase
-    .from("role_paths")
-    .select("id, title, confidence_score, is_primary, why_it_fits")
-    .eq("id", rolePath.id)
-    .single();
-
-  const rolePathJson = JSON.stringify(rawPathDetails ?? { title: rolePath.title });
-
-  // Build company context if job_match_id provided
-  let companyName = "";
+  // Resolve job details from job_match_id if provided
+  let jobDescription = userJobDescription;
   let jobTitle = "";
-  let jobDescription = "";
-  let hasCompanyContext = false;
+  let companyName = "";
 
   if (jobMatchId) {
     const { data: rawMatch } = await supabase
       .from("job_matches")
-      .select("id, job_listings!inner(title, company_name, description)")
+      .select("id, job_listings!inner(title, company_name, description_full)")
       .eq("id", jobMatchId)
       .eq("employee_id", employee.id)
       .single();
 
     if (rawMatch) {
       const match = rawMatch as unknown as JobMatchRow;
-      companyName = match.job_listings.company_name;
       jobTitle = match.job_listings.title;
-      jobDescription = match.job_listings.description ?? "";
-      hasCompanyContext = true;
+      companyName = match.job_listings.company_name;
+
+      // Use fetched description if user-provided one is shorter
+      const fetchedDesc = match.job_listings.description_full ?? "";
+      if (fetchedDesc.length > jobDescription.length) {
+        jobDescription = fetchedDesc;
+      }
     }
   }
 
-  // Assemble career context
+  // If no job_match_id, extract job title from first line of pasted JD
+  if (!jobMatchId || !jobTitle) {
+    const firstLine = jobDescription.split("\n")[0]?.trim();
+    jobTitle = firstLine && firstLine.length <= 120 ? firstLine : "Custom Position";
+  }
+
+  // ─── Cache Deduplication ────────────────────────────────────────
+
+  const hashInput = jobDescription + (interviewStage ?? "") + format;
+  const jobDescriptionHash = createHash("sha256").update(hashInput).digest("hex");
+
+  // Check for existing cache
+  if (!regenerate) {
+    const { data: cached } = await supabase
+      .from("interview_prep")
+      .select("id, content, job_title, company_name, interview_stage, format, created_at")
+      .eq("employee_id", employee.id)
+      .eq("job_description_hash", jobDescriptionHash)
+      .single();
+
+    if (cached) {
+      return NextResponse.json({
+        data: {
+          id: cached.id,
+          ...cached.content as Record<string, unknown>,
+          job_title: cached.job_title,
+          company_name: cached.company_name,
+          interview_stage: cached.interview_stage,
+          format: cached.format,
+          created_at: cached.created_at,
+        },
+        cached: true,
+      });
+    }
+  }
+
+  // Delete existing cache if regenerating
+  if (regenerate) {
+    await supabase
+      .from("interview_prep")
+      .delete()
+      .eq("employee_id", employee.id)
+      .eq("job_description_hash", jobDescriptionHash);
+  }
+
+  // ─── AI Generation ────────────────────────────────────────────
+
   const context = await assemblePathContext(supabase, employee, snapshotId);
 
-  // Build variables for the prompt template
   const variables: Record<string, string> = {
     ...context.variables,
-    role_path_json: rolePathJson,
-    company_name: companyName,
-    job_title: jobTitle,
+    career_snapshot_json: context.careerSnapshotJson,
     job_description: jobDescription,
-    company_context: hasCompanyContext ? "true" : "",
+    interviewer_titles: interviewerTitles?.join("\n") ?? "",
+    interview_stage: interviewStage ?? "",
+    interview_format: format,
   };
 
-  // Call AI pipeline
   let aiResult: GenerateInterviewPrepOutput;
   try {
     aiResult = await executeAIPipeline(
@@ -227,72 +208,209 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // ─── Build response payload ──────────────────────────────────────
+  // ─── Build response payload ───────────────────────────────────
 
   const responseData = {
-    role_path: {
-      id: rolePath.id,
-      title: rolePath.title,
-    },
-    ...(hasCompanyContext
-      ? { company_context: { company_name: companyName, job_title: jobTitle } }
-      : {}),
-    common_questions: aiResult.common_questions,
+    job_title: jobTitle,
+    company_name: companyName || null,
+    interview_stage: interviewStage ?? null,
+    format,
+    interviewer_lenses: aiResult.interviewer_lenses,
+    alignments: aiResult.alignments,
+    gaps_to_address: aiResult.gaps_to_address,
+    opening_statement: aiResult.opening_statement,
+    closing_statement: aiResult.closing_statement,
     behavioral_questions: aiResult.behavioral_questions,
-    company_specific: aiResult.company_specific,
-    strengths_to_emphasize: aiResult.strengths_to_emphasize,
-    weak_spots_to_prepare: aiResult.weak_spots_to_prepare,
-    compensation_prep: aiResult.compensation_prep,
+    technical_questions: aiResult.technical_questions,
+    smart_questions_to_ask: aiResult.smart_questions_to_ask,
+    preparation_checklist: aiResult.preparation_checklist,
   };
 
-  // ─── Persist to cache ────────────────────────────────────────────
+  // ─── Persist to cache ─────────────────────────────────────────
 
-  // Check if an entry already exists (for upsert with nullable column)
-  let existingCacheQuery = supabase
+  const { data: inserted, error: insertError } = await supabase
     .from("interview_prep")
-    .select("id")
-    .eq("employee_id", employee.id)
-    .eq("role_path_id", resolvedPathId);
-
-  if (jobMatchId) {
-    existingCacheQuery = existingCacheQuery.eq("job_match_id", jobMatchId);
-  } else {
-    existingCacheQuery = existingCacheQuery.is("job_match_id", null);
-  }
-
-  const { data: existingCache } = await existingCacheQuery.single();
-
-  if (existingCache) {
-    await supabase
-      .from("interview_prep")
-      .update({
-        content: responseData,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", (existingCache as { id: string }).id);
-  } else {
-    await supabase.from("interview_prep").insert({
+    .insert({
       employee_id: employee.id,
-      role_path_id: resolvedPathId,
-      job_match_id: jobMatchId || null,
+      role_path_id: null,
+      job_match_id: jobMatchId ?? null,
       content: responseData,
-    });
+      job_description_hash: jobDescriptionHash,
+      job_description_text: jobDescription,
+      job_title: jobTitle,
+      company_name: companyName || null,
+      interviewer_titles: interviewerTitles ?? null,
+      interview_stage: interviewStage ?? null,
+      format,
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    return apiError(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Failed to save interview prep"
+    );
   }
 
-  // ─── Log activity (fire-and-forget) ──────────────────────────────
+  // ─── Log activity (fire-and-forget) ───────────────────────────
 
   Promise.resolve(
     supabase.from("activity_log").insert({
       employee_id: employee.id,
       action: "interview_prep_generated",
       metadata: {
-        role_path_title: rolePath.title,
-        ...(hasCompanyContext ? { company_name: companyName, job_title: jobTitle } : {}),
+        job_title: jobTitle,
+        company_name: companyName || null,
+        interview_stage: interviewStage ?? null,
+        format,
       },
     })
   ).catch(() => {
     // Swallow — activity logging is non-critical
   });
 
-  return NextResponse.json({ data: responseData });
+  return NextResponse.json({
+    data: { id: inserted.id, ...responseData },
+  });
+}
+
+// ─── GET Handler ────────────────────────────────────────────────────
+
+export async function GET(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+
+  const roleError = requireEmployee(auth);
+  if (roleError) return roleError;
+
+  const supabase = createServiceClient();
+  const searchParams = request.nextUrl.searchParams;
+  const listMode = searchParams.get("list") === "true";
+  const prepId = searchParams.get("prep_id");
+
+  // Get employee ID
+  const { data: employeeRow } = await supabase
+    .from("employee_profiles")
+    .select("id")
+    .eq("auth_user_id", auth.user.id)
+    .single();
+
+  if (!employeeRow) {
+    return apiError(ERROR_CODES.NOT_FOUND, "Employee profile not found");
+  }
+
+  const employeeId = employeeRow.id;
+
+  if (listMode) {
+    // List all preps for this employee
+    const { data: preps, error: listError } = await supabase
+      .from("interview_prep")
+      .select("id, job_title, company_name, interview_stage, format, created_at")
+      .eq("employee_id", employeeId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (listError) {
+      return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to list interview preps");
+    }
+
+    return NextResponse.json({ data: preps ?? [] });
+  }
+
+  if (prepId) {
+    // Fetch a single prep by ID
+    const { data: prep, error: fetchError } = await supabase
+      .from("interview_prep")
+      .select("*")
+      .eq("id", prepId)
+      .eq("employee_id", employeeId)
+      .single();
+
+    if (fetchError || !prep) {
+      return apiError(ERROR_CODES.NOT_FOUND, "Interview prep not found");
+    }
+
+    return NextResponse.json({ data: prep });
+  }
+
+  return apiError(
+    ERROR_CODES.VALIDATION_ERROR,
+    "Provide either list=true or prep_id query parameter"
+  );
+}
+
+// ─── DELETE Handler ─────────────────────────────────────────────────
+
+export async function DELETE(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+
+  const roleError = requireEmployee(auth);
+  if (roleError) return roleError;
+
+  // Parse body
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid JSON body");
+  }
+
+  const parsed = deleteRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(ERROR_CODES.VALIDATION_ERROR, "Invalid request body", {
+      issues: parsed.error.issues,
+    });
+  }
+
+  const { prep_id: prepId } = parsed.data;
+
+  const supabase = createServiceClient();
+
+  // Get employee ID
+  const { data: employeeRow } = await supabase
+    .from("employee_profiles")
+    .select("id")
+    .eq("auth_user_id", auth.user.id)
+    .single();
+
+  if (!employeeRow) {
+    return apiError(ERROR_CODES.NOT_FOUND, "Employee profile not found");
+  }
+
+  // Verify ownership and delete
+  const { data: existing } = await supabase
+    .from("interview_prep")
+    .select("id")
+    .eq("id", prepId)
+    .eq("employee_id", employeeRow.id)
+    .single();
+
+  if (!existing) {
+    return apiError(ERROR_CODES.NOT_FOUND, "Interview prep not found");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("interview_prep")
+    .delete()
+    .eq("id", prepId)
+    .eq("employee_id", employeeRow.id);
+
+  if (deleteError) {
+    return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to delete interview prep");
+  }
+
+  // Log activity (fire-and-forget)
+  Promise.resolve(
+    supabase.from("activity_log").insert({
+      employee_id: employeeRow.id,
+      action: "interview_prep_deleted",
+      metadata: { prep_id: prepId },
+    })
+  ).catch(() => {
+    // Swallow — activity logging is non-critical
+  });
+
+  return NextResponse.json({ data: { deleted: true } });
 }

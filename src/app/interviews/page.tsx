@@ -1,61 +1,118 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { EmployeeRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import {
+  AlertTriangle,
+  ArrowLeft,
   BarChart3,
-  BookOpen,
   Brain,
-  Building2,
+  CheckSquare,
   ChevronDown,
-  Clock,
-  DollarSign,
+  ClipboardCheck,
+  Eye,
   Lightbulb,
+  Loader2,
   MessageCircle,
   Mic,
-  RefreshCw,
-  Shield,
+  Plus,
   Sparkles,
   Target,
+  Trash2,
   TrendingDown,
   TrendingUp,
+  Users,
   X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────
-
-interface RolePath {
-  id: string;
-  title: string;
-  is_primary: boolean;
-}
 
 interface SavedJob {
   id: string;
   job_match_id: string;
   job_title: string;
   company_name: string;
+  description?: string;
 }
 
-interface PrepQuestion {
+interface InterviewerLens {
+  title: string;
+  focus: string;
+  they_want_to_know: string[];
+}
+
+interface Alignment {
+  your_experience: string;
+  jd_requirement: string;
+}
+
+interface Gap {
+  gap: string;
+  bridging_strategy: string;
+}
+
+interface BehavioralQuestion {
   question: string;
-  suggested_answer: string;
+  situation: string;
+  action: string;
+  result: string;
+  tip?: string;
 }
 
-interface PrepData {
-  role_path: { id: string; title: string };
-  company_context?: { company_name: string; job_title: string };
-  common_questions: PrepQuestion[] | string[];
-  behavioral_questions: PrepQuestion[] | string[];
-  company_specific: PrepQuestion[] | string[];
-  strengths_to_emphasize: string[];
-  weak_spots_to_prepare: string[];
-  compensation_prep: string;
+interface TechnicalQuestion {
+  question: string;
+  talking_points: string[];
+  tip?: string;
+}
+
+interface SmartQuestion {
+  question: string;
+  for_interviewer?: string;
+}
+
+interface PrepGuideData {
+  id: string;
+  job_title: string;
+  company_name: string;
+  interview_stage: string;
+  format: string;
+  created_at: string;
+  interviewer_lenses: InterviewerLens[];
+  alignments: Alignment[];
+  gaps: Gap[];
+  opening_statement: string;
+  closing_statement: string;
+  behavioral_questions: BehavioralQuestion[];
+  technical_questions: TechnicalQuestion[];
+  smart_questions: SmartQuestion[];
+  day_before_checklist: string[];
+  day_of_checklist: string[];
+}
+
+interface SavedPrepSummary {
+  id: string;
+  job_title: string;
+  company_name: string;
+  interview_stage: string;
+  format: string;
+  created_at: string;
 }
 
 interface InterviewSession {
@@ -79,21 +136,18 @@ interface PerformanceData {
 
 // ─── Constants ────────────────────────────────────────────────────────
 
+const STAGE_OPTIONS = [
+  { value: "", label: "Not specified" },
+  { value: "phone_screen", label: "Phone Screen" },
+  { value: "first_round", label: "First Round" },
+  { value: "second_round", label: "Second Round" },
+  { value: "final_round", label: "Final Round" },
+] as const;
+
 const FORMAT_OPTIONS = [
   { value: "behavioral", label: "Behavioral" },
   { value: "technical", label: "Technical" },
   { value: "mixed", label: "Mixed" },
-] as const;
-
-const DURATION_OPTIONS = [
-  { value: 10, label: "10 minutes" },
-  { value: 15, label: "15 minutes" },
-  { value: 20, label: "20 minutes" },
-] as const;
-
-const DIFFICULTY_OPTIONS = [
-  { value: "standard", label: "Standard" },
-  { value: "challenging", label: "Challenging" },
 ] as const;
 
 const SCORE_AREAS = [
@@ -101,6 +155,9 @@ const SCORE_AREAS = [
   { key: "specificity_score" as const, label: "Specificity" },
   { key: "confidence_score" as const, label: "Confidence" },
 ];
+
+const MAX_INTERVIEWERS = 5;
+const MIN_JOB_DESCRIPTION_LENGTH = 50;
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -119,9 +176,9 @@ function computePerformance(sessions: InterviewSession[]): PerformanceData {
   }
 
   const avgOverall =
-    completed.reduce((sum, s) => sum + (s.overall_score ?? 0), 0) / totalCompleted;
+    completed.reduce((sum, s) => sum + (s.overall_score ?? 0), 0) /
+    totalCompleted;
 
-  // Calculate average per area
   const areaAverages = SCORE_AREAS.map((area) => {
     const scored = completed.filter((s) => s[area.key] !== null);
     if (scored.length === 0) return { label: area.label, avg: 0 };
@@ -137,7 +194,6 @@ function computePerformance(sessions: InterviewSession[]): PerformanceData {
     const sorted = [...areaAverages].sort((a, b) => b.avg - a.avg);
     strongestArea = sorted[0].label;
     weakestArea = sorted[sorted.length - 1].label;
-    // Only differ if there's actually a difference
     if (strongestArea === weakestArea && sorted.length > 1) {
       weakestArea = sorted[1].label;
     }
@@ -154,6 +210,15 @@ function computePerformance(sessions: InterviewSession[]): PerformanceData {
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatDateShort(dateStr: string): string {
+  const d = new Date(dateStr);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -161,99 +226,121 @@ function capitalizeFirst(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// ─── Component ────────────────────────────────────────────────────────
+function stageLabel(stage: string): string {
+  const found = STAGE_OPTIONS.find((s) => s.value === stage);
+  return found ? found.label : stage;
+}
+
+// ─── Main Content Component ──────────────────────────────────────────
 
 function InterviewsContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Role paths
-  const [paths, setPaths] = useState<RolePath[]>([]);
-  const [selectedPathId, setSelectedPathId] = useState<string>("");
+  // View state
+  const [view, setView] = useState<"form" | "loading" | "results">("form");
 
-  // Saved/applied jobs for company-specific prep
+  // Form inputs
+  const [jobDescription, setJobDescription] = useState("");
+  const [jobMatchId, setJobMatchId] = useState<string>("");
+  const [interviewerTitles, setInterviewerTitles] = useState<string[]>([""]);
+  const [interviewStage, setInterviewStage] = useState("");
+  const [format, setFormat] = useState("mixed");
+
+  // Saved jobs dropdown
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
-  const [selectedJobMatchId, setSelectedJobMatchId] = useState<string>("");
 
-  // Prep data
-  const [prep, setPrep] = useState<PrepData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isCached, setIsCached] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Prep results
+  const [prepData, setPrepData] = useState<PrepGuideData | null>(null);
+  const [prepId, setPrepId] = useState<string | null>(null);
+
+  // Saved preps list
+  const [savedPreps, setSavedPreps] = useState<SavedPrepSummary[]>([]);
+  const [savedPrepsLoading, setSavedPrepsLoading] = useState(true);
+
+  // Accordion state
+  const [expandedBehavioral, setExpandedBehavioral] = useState<number | null>(
+    null
+  );
+  const [expandedTechnical, setExpandedTechnical] = useState<number | null>(
+    null
+  );
 
   // Performance sidebar
   const [performance, setPerformance] = useState<PerformanceData | null>(null);
 
-  // Mock interview config modal
-  const [showModal, setShowModal] = useState(false);
-  const [interviewType, setInterviewType] = useState<"general" | "company">(
-    "general"
-  );
-  const [interviewJobId, setInterviewJobId] = useState<string>("");
-  const [interviewFormat, setInterviewFormat] = useState<string>("behavioral");
-  const [interviewDuration, setInterviewDuration] = useState<number>(15);
-  const [interviewDifficulty, setInterviewDifficulty] =
-    useState<string>("standard");
-  const [voiceAvailable, setVoiceAvailable] = useState<boolean | null>(null);
+  // Mock interview state (simplified for Task 8)
+  const [practicePrep, setPracticePrep] = useState<{
+    prepId: string;
+    jobTitle: string;
+    companyName: string;
+  } | null>(null);
 
-  // Fetch role paths, saved/applied jobs, and performance data
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Fetch role paths
-        const pathsRes = await fetch("/api/v1/employee/paths");
-        if (pathsRes.ok) {
-          const json = await pathsRes.json();
-          const pathList = json.data ?? json;
-          if (Array.isArray(pathList)) {
-            const selected = pathList.filter(
-              (p: RolePath & { is_selected?: boolean }) =>
-                p.is_selected === true
-            );
-            const mapped = selected.map((p: RolePath) => ({
-              id: p.id,
-              title: p.title,
-              is_primary: p.is_primary,
-            }));
-            setPaths(mapped);
-            const primary = mapped.find((p: RolePath) => p.is_primary);
-            if (primary) setSelectedPathId(primary.id);
-          }
-        }
+  // Delete confirmation
+  const [deletingPrepId, setDeletingPrepId] = useState<string | null>(null);
 
-        // Fetch saved and applied jobs from applications table
-        const appsRes = await fetch("/api/v1/employee/applications?limit=50");
-        if (appsRes.ok) {
-          const json = await appsRes.json();
-          const apps = json.data ?? [];
-          const jobs: SavedJob[] = apps
+  // Generating state for button
+  const [generating, setGenerating] = useState(false);
+
+  // ─── Fetch saved jobs ───────────────────────────────────────────────
+
+  const fetchSavedJobs = useCallback(async () => {
+    try {
+      const res = await fetch(
+        "/api/v1/employee/jobs?app_status=saved&per_page=50"
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const jobs = json.data ?? [];
+        setSavedJobs(
+          jobs
             .filter(
-              (a: { job_title?: string; company_name?: string; job_match_id?: string }) =>
-                a.job_title && a.company_name && a.job_match_id
+              (j: {
+                job_title?: string;
+                company_name?: string;
+                id?: string;
+              }) => j.job_title && j.company_name
             )
             .map(
-              (a: {
+              (j: {
                 id: string;
-                job_match_id: string;
+                job_match_id?: string;
                 job_title: string;
                 company_name: string;
+                description?: string;
               }) => ({
-                id: a.id,
-                job_match_id: a.job_match_id,
-                job_title: a.job_title,
-                company_name: a.company_name,
+                id: j.id,
+                job_match_id: j.job_match_id ?? j.id,
+                job_title: j.job_title,
+                company_name: j.company_name,
+                description: j.description,
               })
-            );
-          setSavedJobs(jobs);
-        }
-      } catch {
-        // Non-critical
+            )
+        );
       }
+    } catch {
+      // Non-critical
     }
-    fetchData();
   }, []);
 
-  // Fetch interview performance data
+  // ─── Fetch saved prep guides ────────────────────────────────────────
+
+  const fetchSavedPreps = useCallback(async () => {
+    setSavedPrepsLoading(true);
+    try {
+      const res = await fetch("/api/v1/employee/interviews/prep?list=true");
+      if (res.ok) {
+        const json = await res.json();
+        setSavedPreps(json.data ?? []);
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      setSavedPrepsLoading(false);
+    }
+  }, []);
+
+  // ─── Fetch performance ──────────────────────────────────────────────
+
   useEffect(() => {
     async function fetchPerformance() {
       try {
@@ -264,216 +351,582 @@ function InterviewsContent() {
           setPerformance(computePerformance(sessions));
         }
       } catch {
-        // Non-critical — sidebar simply won't show
+        // Non-critical
       }
     }
     fetchPerformance();
   }, []);
 
-  // Auto-open mock interview modal when navigated with ?start_mock=true
+  // ─── Initial data fetch ─────────────────────────────────────────────
+
   useEffect(() => {
-    if (searchParams.get("start_mock") === "true" && paths.length > 0) {
-      const pathIdParam = searchParams.get("path_id");
-      if (pathIdParam && paths.some((p) => p.id === pathIdParam)) {
-        setSelectedPathId(pathIdParam);
-      }
-      setShowModal(true);
+    fetchSavedJobs();
+    fetchSavedPreps();
+  }, [fetchSavedJobs, fetchSavedPreps]);
+
+  // ─── Auto-open prep from query params ───────────────────────────────
+
+  useEffect(() => {
+    const prepIdParam = searchParams.get("prep_id");
+    if (prepIdParam) {
+      viewPrepGuide(prepIdParam);
     }
-  }, [searchParams, paths]);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check ElevenLabs availability when modal opens
-  useEffect(() => {
-    if (!showModal) return;
-    setVoiceAvailable(null);
-    fetch("/api/v1/employee/interviews/health")
-      .then((r) => r.json())
-      .then((json) => {
-        setVoiceAvailable(json?.data?.available === true);
-      })
-      .catch(() => {
-        setVoiceAvailable(false);
+  // ─── Generate interview guide ───────────────────────────────────────
+
+  const generateGuide = useCallback(async () => {
+    if (jobDescription.length < MIN_JOB_DESCRIPTION_LENGTH) return;
+
+    setGenerating(true);
+    setView("loading");
+
+    try {
+      const filteredTitles = interviewerTitles.filter(
+        (t) => t.trim().length > 0
+      );
+
+      const body: Record<string, unknown> = {
+        job_description: jobDescription,
+        format,
+      };
+
+      if (jobMatchId) {
+        body.job_match_id = jobMatchId;
+      }
+      if (filteredTitles.length > 0) {
+        body.interviewer_titles = filteredTitles;
+      }
+      if (interviewStage) {
+        body.interview_stage = interviewStage;
+      }
+
+      const res = await fetch("/api/v1/employee/interviews/prep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-  }, [showModal]);
 
-  // Fetch interview prep (with optional regenerate flag)
-  const fetchPrep = useCallback(
-    async (forceRegenerate = false) => {
-      if (!selectedPathId) return;
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(
+          errJson?.error?.message ??
+            "Failed to generate interview guide. Please try again."
+        );
+      }
 
-      setLoading(true);
-      setError(null);
-      setIsCached(false);
+      const json = await res.json();
+      const data = json.data as PrepGuideData;
+      setPrepData(data);
+      setPrepId(data.id);
+      setExpandedBehavioral(null);
+      setExpandedTechnical(null);
+      setView("results");
+
+      // Refresh saved preps list
+      fetchSavedPreps();
+    } catch (err) {
+      toast.error({
+        title: "Generation Failed",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Failed to generate interview guide. Please try again.",
+      });
+      setView("form");
+    } finally {
+      setGenerating(false);
+    }
+  }, [
+    jobDescription,
+    jobMatchId,
+    interviewerTitles,
+    interviewStage,
+    format,
+    fetchSavedPreps,
+  ]);
+
+  // ─── View saved prep guide ──────────────────────────────────────────
+
+  const viewPrepGuide = useCallback(
+    async (id: string) => {
+      setView("loading");
 
       try {
-        const params = new URLSearchParams();
-        params.set("path_id", selectedPathId);
-        if (selectedJobMatchId) {
-          params.set("job_match_id", selectedJobMatchId);
-        }
-        if (forceRegenerate) {
-          params.set("regenerate", "true");
-        }
-
         const res = await fetch(
-          `/api/v1/employee/interviews/prep?${params.toString()}`
+          `/api/v1/employee/interviews/prep?prep_id=${id}`
         );
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => null);
           throw new Error(
-            errJson?.error?.message ??
-              "Failed to generate interview prep materials"
+            errJson?.error?.message ?? "Failed to load interview guide."
           );
         }
 
         const json = await res.json();
-        setPrep(json.data as PrepData);
-        setIsCached(json.cached === true);
+        const data = json.data as PrepGuideData;
+        setPrepData(data);
+        setPrepId(data.id);
+        setExpandedBehavioral(null);
+        setExpandedTechnical(null);
+        setView("results");
       } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to generate interview prep materials"
-        );
-      } finally {
-        setLoading(false);
+        toast.error({
+          title: "Load Failed",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Failed to load interview guide.",
+        });
+        setView("form");
       }
     },
-    [selectedPathId, selectedJobMatchId]
+    []
   );
 
-  // Auto-fetch prep when path or job context changes
-  const [lastFetchKey, setLastFetchKey] = useState<string>("");
-  useEffect(() => {
-    if (!selectedPathId) return;
-    const fetchKey = `${selectedPathId}:${selectedJobMatchId}`;
-    if (fetchKey !== lastFetchKey) {
-      setLastFetchKey(fetchKey);
-      fetchPrep();
+  // ─── Delete prep guide ──────────────────────────────────────────────
+
+  const deletePrepGuide = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch("/api/v1/employee/interviews/prep", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prep_id: id }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to delete interview guide.");
+        }
+
+        toast.success({
+          title: "Guide Deleted",
+          description: "The interview guide has been removed.",
+        });
+
+        setSavedPreps((prev) => prev.filter((p) => p.id !== id));
+        setDeletingPrepId(null);
+
+        // If we were viewing this prep, go back to form
+        if (prepId === id) {
+          setPrepData(null);
+          setPrepId(null);
+          setView("form");
+        }
+      } catch (err) {
+        toast.error({
+          title: "Delete Failed",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Failed to delete interview guide.",
+        });
+        setDeletingPrepId(null);
+      }
+    },
+    [prepId]
+  );
+
+  // ─── Saved job selection handler ────────────────────────────────────
+
+  const handleSavedJobSelect = useCallback(
+    (jobId: string) => {
+      if (!jobId) {
+        setJobMatchId("");
+        return;
+      }
+      const job = savedJobs.find(
+        (j) => j.job_match_id === jobId || j.id === jobId
+      );
+      if (job) {
+        setJobMatchId(job.job_match_id);
+        if (job.description) {
+          setJobDescription(job.description);
+        }
+      }
+    },
+    [savedJobs]
+  );
+
+  // ─── Interviewer management ─────────────────────────────────────────
+
+  const addInterviewer = useCallback(() => {
+    if (interviewerTitles.length < MAX_INTERVIEWERS) {
+      setInterviewerTitles((prev) => [...prev, ""]);
     }
-  }, [selectedPathId, selectedJobMatchId, lastFetchKey, fetchPrep]);
+  }, [interviewerTitles.length]);
+
+  const removeInterviewer = useCallback(
+    (index: number) => {
+      if (interviewerTitles.length <= 1) {
+        setInterviewerTitles([""]);
+        return;
+      }
+      setInterviewerTitles((prev) => prev.filter((_, i) => i !== index));
+    },
+    [interviewerTitles.length]
+  );
+
+  const updateInterviewer = useCallback((index: number, value: string) => {
+    setInterviewerTitles((prev) =>
+      prev.map((t, i) => (i === index ? value : t))
+    );
+  }, []);
+
+  // ─── Back to form ───────────────────────────────────────────────────
+
+  const backToForm = useCallback(() => {
+    setPrepData(null);
+    setPrepId(null);
+    setExpandedBehavioral(null);
+    setExpandedTechnical(null);
+    setView("form");
+  }, []);
+
+  // ─── Render ─────────────────────────────────────────────────────────
 
   return (
     <div className="flex gap-6 max-w-6xl mx-auto px-4 md:px-8 py-8">
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">
-              Interview Prep Hub
-            </h1>
-            <p className="text-sm text-text-secondary mt-1">
-              Role-specific preparation to ace your interviews
-            </p>
-          </div>
-          <Button
-            onClick={() => setShowModal(true)}
-            disabled={!selectedPathId || loading}
-            className="gap-2"
-          >
-            <Mic className="h-4 w-4" />
-            Start Mock Interview
-          </Button>
-        </div>
-
-        {/* Path and Context selectors */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          {/* Role path selector */}
-          <div className="flex-1">
-            <label className="text-xs text-text-secondary mb-1 block">
-              Role Path
-            </label>
-            <div className="relative">
-              <select
-                value={selectedPathId}
-                onChange={(e) => {
-                  setSelectedPathId(e.target.value);
-                  setPrep(null);
-                }}
-                className="w-full appearance-none rounded-sm border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-primary focus:border-primary focus:outline-none"
-              >
-                <option value="">Select a role path</option>
-                {paths.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                    {p.is_primary ? " (Primary)" : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary pointer-events-none" />
+        {/* ─── FORM VIEW ──────────────────────────────────────────── */}
+        {view === "form" && (
+          <div className="space-y-8">
+            {/* Header */}
+            <div>
+              <h1 className="text-2xl font-semibold text-text-primary">
+                Interview Preparation
+              </h1>
+              <p className="text-sm text-text-secondary mt-1">
+                Prepare for your next interview with a personalized guide
+                tailored to the job and your experience.
+              </p>
             </div>
-          </div>
 
-          {/* Context dropdown (General + saved/applied jobs) */}
-          <div className="flex-1">
-            <label className="text-xs text-text-secondary mb-1 block">
-              Context{" "}
-              <span className="text-text-secondary/60">(optional)</span>
-            </label>
-            <div className="relative">
-              <select
-                value={selectedJobMatchId}
-                onChange={(e) => {
-                  setSelectedJobMatchId(e.target.value);
-                  setPrep(null);
-                }}
-                className="w-full appearance-none rounded-sm border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-primary focus:border-primary focus:outline-none"
+            {/* Input Form */}
+            <Card className="p-6 space-y-6">
+              {/* Job Description */}
+              <div className="space-y-2">
+                <Label htmlFor="job-description">
+                  Job Description <span className="text-danger">*</span>
+                </Label>
+                <Textarea
+                  id="job-description"
+                  value={jobDescription}
+                  onChange={(e) => {
+                    setJobDescription(e.target.value);
+                    setJobMatchId("");
+                  }}
+                  placeholder="Paste the full job description here..."
+                  rows={8}
+                  className="resize-y"
+                />
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-text-secondary">
+                    {jobDescription.length} characters
+                  </p>
+                  {jobDescription.length > 0 &&
+                    jobDescription.length < MIN_JOB_DESCRIPTION_LENGTH && (
+                      <p className="text-xs text-danger">
+                        Minimum {MIN_JOB_DESCRIPTION_LENGTH} characters required
+                      </p>
+                    )}
+                </div>
+
+                {/* Or select from saved jobs */}
+                {savedJobs.length > 0 && (
+                  <div className="pt-2">
+                    <Label
+                      htmlFor="saved-job-select"
+                      className="text-xs text-text-secondary font-normal"
+                    >
+                      Or select from your saved jobs
+                    </Label>
+                    <Select
+                      value={jobMatchId || "none"}
+                      onValueChange={(val) =>
+                        handleSavedJobSelect(val === "none" ? "" : val)
+                      }
+                    >
+                      <SelectTrigger
+                        id="saved-job-select"
+                        className="mt-1"
+                      >
+                        <SelectValue placeholder="Select a saved job..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          Select a saved job...
+                        </SelectItem>
+                        {savedJobs.map((j) => (
+                          <SelectItem
+                            key={j.id}
+                            value={j.job_match_id || j.id}
+                          >
+                            {j.job_title} at {j.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {/* Interviewer Titles */}
+              <div className="space-y-2">
+                <div>
+                  <Label>Who are you interviewing with? (optional)</Label>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Add their titles to get interviewer-specific insights
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {interviewerTitles.map((title, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={title}
+                        onChange={(e) =>
+                          updateInterviewer(index, e.target.value)
+                        }
+                        placeholder="e.g., VP Engineering, HR Manager"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeInterviewer(index)}
+                        className="flex-shrink-0 h-10 w-10 text-text-secondary hover:text-danger"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {interviewerTitles.length < MAX_INTERVIEWERS && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={addInterviewer}
+                      className="gap-1.5 text-text-secondary"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add interviewer
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Interview Stage + Format row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Interview Stage */}
+                <div className="space-y-2">
+                  <Label htmlFor="interview-stage">Interview Stage</Label>
+                  <Select
+                    value={interviewStage || "not_specified"}
+                    onValueChange={(val) =>
+                      setInterviewStage(val === "not_specified" ? "" : val)
+                    }
+                  >
+                    <SelectTrigger id="interview-stage">
+                      <SelectValue placeholder="Not specified" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not_specified">
+                        Not specified
+                      </SelectItem>
+                      {STAGE_OPTIONS.filter((s) => s.value !== "").map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Interview Format */}
+                <div className="space-y-2">
+                  <Label>Interview Format</Label>
+                  <div className="flex rounded-sm border border-border overflow-hidden">
+                    {FORMAT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormat(opt.value)}
+                        className={cn(
+                          "flex-1 py-2 text-sm font-medium transition-all duration-200 ease-out",
+                          format === opt.value
+                            ? "bg-primary text-white"
+                            : "bg-surface text-text-primary hover:bg-primary-light"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Generate Button */}
+              <Button
+                onClick={generateGuide}
+                disabled={
+                  generating ||
+                  jobDescription.length < MIN_JOB_DESCRIPTION_LENGTH
+                }
+                className="w-full gap-2"
+                size="lg"
               >
-                <option value="">General</option>
-                {savedJobs.map((j) => (
-                  <option key={j.id} value={j.job_match_id}>
-                    {j.company_name} — {j.job_title}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary pointer-events-none" />
-            </div>
-          </div>
-        </div>
+                {generating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating your interview guide...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate Interview Guide
+                  </>
+                )}
+              </Button>
+            </Card>
 
-        {/* Regenerate button (shown when content is loaded from cache) */}
-        {!loading && prep && isCached && (
-          <div className="mb-4 flex items-center gap-3">
-            <span className="text-xs text-text-secondary">
-              Loaded from cache
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchPrep(true)}
-              className="gap-1.5"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Regenerate
-            </Button>
+            {/* ─── MY PREP GUIDES ────────────────────────────────────── */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-semibold text-text-primary">
+                  My Prep Guides
+                </h2>
+                {savedPreps.length > 0 && (
+                  <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-primary/10 text-xs font-medium text-primary">
+                    {savedPreps.length}
+                  </span>
+                )}
+              </div>
+
+              {savedPrepsLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="rounded-md border border-border bg-surface p-4 space-y-2"
+                    >
+                      <div className="h-4 w-48 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                      <div className="h-3 w-32 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                    </div>
+                  ))}
+                </div>
+              ) : savedPreps.length === 0 ? (
+                <div className="rounded-md border border-border bg-surface p-8 text-center">
+                  <ClipboardCheck className="h-10 w-10 text-primary/20 mx-auto mb-3" />
+                  <p className="text-sm text-text-secondary">
+                    No interview prep guides yet. Generate your first one above.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {savedPreps.map((prep) => (
+                    <Card key={prep.id} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-text-primary truncate">
+                            {prep.job_title}
+                          </p>
+                          <p className="text-xs text-text-secondary mt-0.5">
+                            {prep.company_name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            {prep.interview_stage && (
+                              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                                {stageLabel(prep.interview_stage)}
+                              </span>
+                            )}
+                            {prep.format && (
+                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                                {capitalizeFirst(prep.format)}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-text-secondary">
+                              Generated {formatDate(prep.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => viewPrepGuide(prep.id)}
+                            className="gap-1.5"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View
+                          </Button>
+                          {deletingPrepId === prep.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deletePrepGuide(prep.id)}
+                              >
+                                Confirm
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeletingPrepId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeletingPrepId(prep.id)}
+                              className="h-8 w-8 text-text-secondary hover:text-danger hover:bg-danger/5"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Loading skeleton */}
-        {loading && (
+        {/* ─── LOADING VIEW ───────────────────────────────────────── */}
+        {view === "loading" && (
           <div className="space-y-4">
+            {/* Loading banner */}
             <div className="rounded-md border border-border bg-surface p-5">
-              <div className="rounded-sm bg-primary-light p-4 text-center">
-                <Sparkles className="h-6 w-6 text-primary mx-auto mb-2" />
+              <div className="rounded-sm bg-primary-light p-6 text-center">
+                <Sparkles className="h-8 w-8 text-primary mx-auto mb-3" />
                 <p className="text-sm font-medium text-primary">
-                  Preparing your interview materials...
+                  Building your personalized interview guide...
                 </p>
                 <p className="text-xs text-text-secondary mt-1">
-                  Analyzing your profile and target role
+                  Analyzing the job description and your experience
                 </p>
               </div>
             </div>
-            {Array.from({ length: 4 }).map((_, i) => (
+
+            {/* Skeleton sections */}
+            {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
                 className="rounded-md border border-border bg-surface p-5 space-y-3"
               >
-                <div className="h-5 w-48 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-5 rounded animate-shimmer bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                  <div className="h-5 w-40 animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                </div>
                 {Array.from({ length: 3 }).map((_, j) => (
                   <div
                     key={j}
                     className="h-4 w-full animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]"
+                    style={{ width: `${85 - j * 15}%` }}
                   />
                 ))}
               </div>
@@ -481,138 +934,452 @@ function InterviewsContent() {
           </div>
         )}
 
-        {/* Error */}
-        {error && !loading && (
-          <div className="rounded-md border border-[#DC2626]/20 bg-[#DC2626]/5 p-5">
-            <p className="text-sm text-[#DC2626] font-medium mb-1">{error}</p>
-            <p className="text-xs text-text-secondary">
-              Check your selections and try again.
-            </p>
-          </div>
-        )}
+        {/* ─── RESULTS VIEW ───────────────────────────────────────── */}
+        {view === "results" && prepData && (
+          <div className="space-y-6">
+            {/* Top bar */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={backToForm}
+                  className="gap-1.5"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              </div>
 
-        {/* Empty state */}
-        {!loading && !error && !prep && !selectedPathId && (
-          <div className="rounded-md border border-border bg-surface p-8 text-center">
-            <BookOpen className="h-10 w-10 text-primary/30 mx-auto mb-3" />
-            <h3 className="text-sm font-medium text-text-primary mb-1">
-              Start your first mock interview to practice
-            </h3>
-            <p className="text-xs text-text-secondary max-w-sm mx-auto">
-              Select a role path above and we&apos;ll generate personalized
-              interview prep materials to help you prepare.
-            </p>
-          </div>
-        )}
-
-        {/* Prep content */}
-        {prep && !loading && (
-          <div className="space-y-4">
-            {/* Role path header */}
-            <div className="rounded-md border border-primary/20 bg-primary-light p-4 flex items-center gap-3">
-              <Target className="h-5 w-5 text-primary flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-text-primary">
-                  Prep for: {prep.role_path.title}
-                </p>
-                {prep.company_context && (
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    Company: {prep.company_context.company_name} ·{" "}
-                    {prep.company_context.job_title}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h1 className="text-xl font-semibold text-text-primary">
+                    {prepData.job_title}
+                  </h1>
+                  <p className="text-sm text-text-secondary">
+                    {prepData.company_name}
                   </p>
-                )}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {prepData.interview_stage && (
+                      <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                        {stageLabel(prepData.interview_stage)}
+                      </span>
+                    )}
+                    {prepData.format && (
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+                        {capitalizeFirst(prepData.format)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() =>
+                    setPracticePrep({
+                      prepId: prepData.id,
+                      jobTitle: prepData.job_title,
+                      companyName: prepData.company_name,
+                    })
+                  }
+                  className="gap-2"
+                >
+                  <Mic className="h-4 w-4" />
+                  Practice These Questions
+                </Button>
+              </div>
+
+              {/* Advice banner */}
+              <div className="rounded-md bg-blue-50 border border-blue-100 px-4 py-3">
+                <p className="text-sm text-blue-800">
+                  Use these as frameworks to internalize your answers, not
+                  scripts to memorize.
+                </p>
               </div>
             </div>
 
-            {/* Common questions */}
-            <PrepSection
-              icon={<MessageCircle className="h-4 w-4" />}
-              title="Common Questions"
-              description="Questions frequently asked for this role type"
-            >
-              <QuestionList items={prep.common_questions} />
-            </PrepSection>
+            {/* Section 1: Know Your Interviewers */}
+            {prepData.interviewer_lenses &&
+              prepData.interviewer_lenses.length > 0 && (
+                <ResultSection
+                  icon={<Users className="h-4 w-4" />}
+                  title="Know Your Interviewers"
+                  sectionNumber={1}
+                >
+                  <div className="space-y-3">
+                    {prepData.interviewer_lenses.map((lens, i) => (
+                      <Card key={i} className="p-4">
+                        <p className="text-sm font-semibold text-text-primary">
+                          {lens.title}
+                        </p>
+                        <p className="text-xs text-text-secondary mt-0.5">
+                          {lens.focus}
+                        </p>
+                        <div className="mt-3">
+                          <p className="text-xs font-medium text-text-secondary mb-1.5">
+                            They want to know:
+                          </p>
+                          <ul className="space-y-1">
+                            {lens.they_want_to_know.map((item, j) => (
+                              <li
+                                key={j}
+                                className="flex items-start gap-2 text-sm text-text-primary"
+                              >
+                                <span className="text-primary mt-1 flex-shrink-0">
+                                  &bull;
+                                </span>
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </ResultSection>
+              )}
 
-            {/* Behavioral questions */}
-            <PrepSection
-              icon={<Brain className="h-4 w-4" />}
-              title="Behavioral Questions"
-              description="'Tell me about a time...' questions relevant to your experience"
-            >
-              <QuestionList items={prep.behavioral_questions} />
-            </PrepSection>
-
-            {/* Company-specific questions */}
-            {prep.company_specific.length > 0 && (
-              <PrepSection
-                icon={<Building2 className="h-4 w-4" />}
-                title="Company-Specific Questions"
-                description={`Tailored for ${prep.company_context?.company_name ?? "this company"}`}
+            {/* Section 2: Role Snapshot & Strongest Alignments */}
+            {prepData.alignments && prepData.alignments.length > 0 && (
+              <ResultSection
+                icon={<Target className="h-4 w-4" />}
+                title="Role Snapshot & Strongest Alignments"
+                sectionNumber={2}
               >
-                <QuestionList items={prep.company_specific} />
-              </PrepSection>
+                <div className="space-y-2">
+                  {/* Header row */}
+                  <div className="hidden sm:grid sm:grid-cols-[1fr_auto_1fr] gap-3 px-3 pb-2">
+                    <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+                      Your Experience
+                    </p>
+                    <div className="w-6" />
+                    <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+                      JD Requirement
+                    </p>
+                  </div>
+                  {prepData.alignments.map((alignment, i) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 sm:gap-3 rounded-sm border border-border bg-background p-3 items-center"
+                    >
+                      <p className="text-sm text-text-primary">
+                        <span className="sm:hidden text-xs font-medium text-text-secondary block mb-0.5">
+                          Your Experience
+                        </span>
+                        {alignment.your_experience}
+                      </p>
+                      <div className="hidden sm:flex items-center justify-center w-6 h-6 rounded-full bg-[#059669]/10">
+                        <svg
+                          className="h-3.5 w-3.5 text-[#059669]"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2.5}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-text-primary">
+                        <span className="sm:hidden text-xs font-medium text-text-secondary block mb-0.5">
+                          JD Requirement
+                        </span>
+                        {alignment.jd_requirement}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ResultSection>
             )}
 
-            {/* Strengths to emphasize */}
-            <PrepSection
-              icon={<Lightbulb className="h-4 w-4" />}
-              title="Strengths to Emphasize"
-              description="Key strengths to highlight during your interview"
-            >
-              <StrengthsList items={prep.strengths_to_emphasize} />
-            </PrepSection>
+            {/* Section 3: The Gap(s) to Address */}
+            {prepData.gaps && prepData.gaps.length > 0 && (
+              <ResultSection
+                icon={<AlertTriangle className="h-4 w-4" />}
+                title="The Gap(s) to Address"
+                sectionNumber={3}
+              >
+                <div className="space-y-3">
+                  {prepData.gaps.map((gap, i) => (
+                    <div
+                      key={i}
+                      className="rounded-sm border border-[#D97706]/20 bg-[#D97706]/5 p-4"
+                    >
+                      <p className="text-sm font-semibold text-text-primary">
+                        {gap.gap}
+                      </p>
+                      <p className="text-sm text-text-secondary mt-1.5 leading-relaxed">
+                        {gap.bridging_strategy}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ResultSection>
+            )}
 
-            {/* Weak spots */}
-            <PrepSection
-              icon={<Shield className="h-4 w-4" />}
-              title="Weak Spots to Prepare For"
-              description="Areas the interviewer might probe — with guidance on how to address them"
-            >
-              <WeakSpotsList items={prep.weak_spots_to_prepare} />
-            </PrepSection>
+            {/* Section 4: Opening & Closing Positioning */}
+            {(prepData.opening_statement || prepData.closing_statement) && (
+              <ResultSection
+                icon={<MessageCircle className="h-4 w-4" />}
+                title="Opening & Closing Positioning"
+                sectionNumber={4}
+              >
+                <div className="space-y-4">
+                  {prepData.opening_statement && (
+                    <div>
+                      <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+                        &ldquo;Tell Me About Yourself&rdquo;
+                      </p>
+                      <div className="rounded-sm bg-blue-50 border border-blue-100 p-4">
+                        <p className="text-sm text-blue-900 leading-relaxed">
+                          {prepData.opening_statement}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {prepData.closing_statement && (
+                    <div>
+                      <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+                        Closing Statement
+                      </p>
+                      <div className="rounded-sm bg-[#059669]/5 border border-[#059669]/10 p-4">
+                        <p className="text-sm text-[#059669]/90 leading-relaxed">
+                          {prepData.closing_statement}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ResultSection>
+            )}
 
-            {/* Compensation prep */}
-            <PrepSection
-              icon={<DollarSign className="h-4 w-4" />}
-              title="Compensation Conversation"
-              description="Guidance on discussing salary and benefits"
-            >
-              <div className="rounded-sm bg-background p-4 text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
-                {prep.compensation_prep}
-              </div>
-            </PrepSection>
+            {/* Section 5: Behavioral Questions & STAR Answers */}
+            {prepData.behavioral_questions &&
+              prepData.behavioral_questions.length > 0 && (
+                <ResultSection
+                  icon={<Brain className="h-4 w-4" />}
+                  title="Behavioral Questions & STAR Answers"
+                  sectionNumber={5}
+                >
+                  <div className="space-y-2">
+                    {prepData.behavioral_questions.map((q, i) => {
+                      const isExpanded = expandedBehavioral === i;
+                      return (
+                        <div
+                          key={i}
+                          className="rounded-sm border border-border overflow-hidden"
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedBehavioral(isExpanded ? null : i)
+                            }
+                            className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-all duration-200 ease-out"
+                          >
+                            <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                              {i + 1}
+                            </span>
+                            <span className="flex-1 text-sm text-text-primary font-medium leading-relaxed">
+                              {q.question}
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 text-muted flex-shrink-0 transition-transform duration-200",
+                                isExpanded && "rotate-180"
+                              )}
+                            />
+                          </button>
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-0 ml-8 space-y-3">
+                              <div>
+                                <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+                                  Situation
+                                </p>
+                                <p className="text-sm text-text-primary leading-relaxed">
+                                  {q.situation}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+                                  Action
+                                </p>
+                                <p className="text-sm text-text-primary leading-relaxed">
+                                  {q.action}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+                                  Result
+                                </p>
+                                <p className="text-sm text-text-primary leading-relaxed">
+                                  {q.result}
+                                </p>
+                              </div>
+                              {q.tip && (
+                                <div className="rounded-sm bg-yellow-50 border border-yellow-100 p-3">
+                                  <p className="text-xs font-medium text-yellow-800">
+                                    Tip: {q.tip}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ResultSection>
+              )}
+
+            {/* Section 6: Technical & Situational Questions */}
+            {prepData.technical_questions &&
+              prepData.technical_questions.length > 0 && (
+                <ResultSection
+                  icon={<BarChart3 className="h-4 w-4" />}
+                  title="Technical & Situational Questions"
+                  sectionNumber={6}
+                >
+                  <div className="space-y-2">
+                    {prepData.technical_questions.map((q, i) => {
+                      const isExpanded = expandedTechnical === i;
+                      return (
+                        <div
+                          key={i}
+                          className="rounded-sm border border-border overflow-hidden"
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedTechnical(isExpanded ? null : i)
+                            }
+                            className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-all duration-200 ease-out"
+                          >
+                            <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                              {i + 1}
+                            </span>
+                            <span className="flex-1 text-sm text-text-primary font-medium leading-relaxed">
+                              {q.question}
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 text-muted flex-shrink-0 transition-transform duration-200",
+                                isExpanded && "rotate-180"
+                              )}
+                            />
+                          </button>
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-0 ml-8 space-y-3">
+                              <ul className="space-y-1.5">
+                                {q.talking_points.map((point, j) => (
+                                  <li
+                                    key={j}
+                                    className="flex items-start gap-2 text-sm text-text-primary"
+                                  >
+                                    <span className="text-primary mt-1 flex-shrink-0">
+                                      &bull;
+                                    </span>
+                                    {point}
+                                  </li>
+                                ))}
+                              </ul>
+                              {q.tip && (
+                                <div className="rounded-sm bg-yellow-50 border border-yellow-100 p-3">
+                                  <p className="text-xs font-medium text-yellow-800">
+                                    Tip: {q.tip}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ResultSection>
+              )}
+
+            {/* Section 7: Smart Questions to Ask */}
+            {prepData.smart_questions &&
+              prepData.smart_questions.length > 0 && (
+                <ResultSection
+                  icon={<Lightbulb className="h-4 w-4" />}
+                  title="Smart Questions to Ask"
+                  sectionNumber={7}
+                >
+                  <SmartQuestionsSection
+                    questions={prepData.smart_questions}
+                  />
+                </ResultSection>
+              )}
+
+            {/* Section 8: Final Preparation Checklist */}
+            {((prepData.day_before_checklist &&
+              prepData.day_before_checklist.length > 0) ||
+              (prepData.day_of_checklist &&
+                prepData.day_of_checklist.length > 0)) && (
+              <ResultSection
+                icon={<CheckSquare className="h-4 w-4" />}
+                title="Final Preparation Checklist"
+                sectionNumber={8}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {prepData.day_before_checklist &&
+                    prepData.day_before_checklist.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
+                          Day Before
+                        </p>
+                        <div className="space-y-2">
+                          {prepData.day_before_checklist.map((item, i) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-2.5 p-2"
+                            >
+                              <div className="flex-shrink-0 mt-0.5 h-4 w-4 rounded border border-border bg-surface" />
+                              <p className="text-sm text-text-primary leading-relaxed">
+                                {item}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  {prepData.day_of_checklist &&
+                    prepData.day_of_checklist.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
+                          Day Of
+                        </p>
+                        <div className="space-y-2">
+                          {prepData.day_of_checklist.map((item, i) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-2.5 p-2"
+                            >
+                              <div className="flex-shrink-0 mt-0.5 h-4 w-4 rounded border border-border bg-surface" />
+                              <p className="text-sm text-text-primary leading-relaxed">
+                                {item}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                </div>
+              </ResultSection>
+            )}
           </div>
         )}
 
-        {/* Mock Interview Configuration Modal */}
-        {showModal && (
+        {/* Mock Interview Modal (simplified — accepts prepId, refined in Task 8) */}
+        {practicePrep && (
           <MockInterviewModal
-            paths={paths}
-            selectedPathId={selectedPathId}
-            savedJobs={savedJobs}
-            interviewType={interviewType}
-            interviewJobId={interviewJobId}
-            interviewFormat={interviewFormat}
-            interviewDuration={interviewDuration}
-            interviewDifficulty={interviewDifficulty}
-            onChangeType={setInterviewType}
-            onChangeJobId={setInterviewJobId}
-            onChangeFormat={setInterviewFormat}
-            onChangeDuration={setInterviewDuration}
-            onChangeDifficulty={setInterviewDifficulty}
-            voiceAvailable={voiceAvailable}
-            onClose={() => setShowModal(false)}
-            onBegin={() => {
-              const params = new URLSearchParams();
-              params.set("path_id", selectedPathId);
-              params.set("format", interviewFormat);
-              params.set("difficulty", interviewDifficulty);
-              params.set("duration", String(interviewDuration));
-              if (interviewType === "company" && interviewJobId) {
-                params.set("job_match_id", interviewJobId);
-              }
-              router.push(`/interviews/session?${params.toString()}`);
-            }}
+            prepId={practicePrep.prepId}
+            jobTitle={practicePrep.jobTitle}
+            companyName={practicePrep.companyName}
+            onClose={() => setPracticePrep(null)}
           />
         )}
       </div>
@@ -623,7 +1390,118 @@ function InterviewsContent() {
   );
 }
 
-// ─── Performance Sidebar ──────────────────────────────────────────────
+// ─── Result Section Wrapper ──────────────────────────────────────────
+
+function ResultSection({
+  icon,
+  title,
+  sectionNumber,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sectionNumber: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-surface p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-primary">{icon}</span>
+        <h3 className="text-sm font-semibold text-text-primary">
+          <span className="text-text-secondary font-normal mr-1">
+            {sectionNumber}.
+          </span>
+          {title}
+        </h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Smart Questions Section ─────────────────────────────────────────
+
+function SmartQuestionsSection({
+  questions,
+}: {
+  questions: SmartQuestion[];
+}) {
+  // Group by interviewer if for_interviewer is set
+  const hasInterviewerGrouping = questions.some((q) => q.for_interviewer);
+
+  if (hasInterviewerGrouping) {
+    const grouped: Record<string, SmartQuestion[]> = {};
+    const ungrouped: SmartQuestion[] = [];
+
+    questions.forEach((q) => {
+      if (q.for_interviewer) {
+        if (!grouped[q.for_interviewer]) {
+          grouped[q.for_interviewer] = [];
+        }
+        grouped[q.for_interviewer].push(q);
+      } else {
+        ungrouped.push(q);
+      }
+    });
+
+    return (
+      <div className="space-y-4">
+        {Object.entries(grouped).map(([interviewer, qs]) => (
+          <div key={interviewer}>
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+              For {interviewer}
+            </p>
+            <ul className="space-y-2">
+              {qs.map((q, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-2 rounded-sm bg-background p-3"
+                >
+                  <Lightbulb className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-text-primary">{q.question}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {ungrouped.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+              General
+            </p>
+            <ul className="space-y-2">
+              {ungrouped.map((q, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-2 rounded-sm bg-background p-3"
+                >
+                  <Lightbulb className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-text-primary">{q.question}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {questions.map((q, i) => (
+        <li
+          key={i}
+          className="flex items-start gap-2 rounded-sm bg-background p-3"
+        >
+          <Lightbulb className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-text-primary">{q.question}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ─── Performance Sidebar ─────────────────────────────────────────────
 
 function PerformanceSidebar({
   performance,
@@ -631,7 +1509,6 @@ function PerformanceSidebar({
   performance: PerformanceData | null;
 }) {
   if (!performance) {
-    // Loading skeleton for sidebar
     return (
       <aside className="hidden lg:block w-[300px] flex-shrink-0">
         <div className="rounded-md border border-border bg-surface p-5 space-y-4 sticky top-8">
@@ -666,7 +1543,6 @@ function PerformanceSidebar({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Stats grid */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-sm bg-background p-3">
                 <p className="text-xs text-text-secondary">Sessions</p>
@@ -677,7 +1553,7 @@ function PerformanceSidebar({
               <div className="rounded-sm bg-background p-3">
                 <p className="text-xs text-text-secondary">Avg Score</p>
                 <p className="text-lg font-semibold text-primary">
-                  {performance.averageScore ?? "—"}
+                  {performance.averageScore ?? "\u2014"}
                   {performance.averageScore !== null && (
                     <span className="text-xs text-text-secondary font-normal">
                       /100
@@ -687,7 +1563,6 @@ function PerformanceSidebar({
               </div>
             </div>
 
-            {/* Strongest / Weakest */}
             {performance.strongestArea && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 rounded-sm bg-[#059669]/5 border border-[#059669]/10 p-2.5">
@@ -716,7 +1591,6 @@ function PerformanceSidebar({
               </div>
             )}
 
-            {/* Recent sessions */}
             <div>
               <p className="text-xs font-medium text-text-secondary mb-2">
                 Recent Sessions
@@ -726,14 +1600,14 @@ function PerformanceSidebar({
                   <Link
                     key={session.id}
                     href={`/interviews/feedback/${session.id}`}
-                    className="flex items-center justify-between rounded-sm bg-background p-2.5 hover:bg-primary-light transition-default group"
+                    className="flex items-center justify-between rounded-sm bg-background p-2.5 hover:bg-primary-light transition-all duration-200 ease-out group"
                   >
                     <div>
-                      <p className="text-xs font-medium text-text-primary group-hover:text-primary transition-default">
+                      <p className="text-xs font-medium text-text-primary group-hover:text-primary transition-all duration-200 ease-out">
                         {capitalizeFirst(session.format)}
                       </p>
                       <p className="text-[10px] text-text-secondary">
-                        {formatDate(session.completed_at)}
+                        {formatDateShort(session.completed_at)}
                       </p>
                     </div>
                     {session.overall_score !== null && (
@@ -761,246 +1635,71 @@ function PerformanceSidebar({
   );
 }
 
-// ─── Subcomponents ────────────────────────────────────────────────────
-
-function PrepSection({
-  icon,
-  title,
-  description,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-md border border-border bg-surface p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-primary">{icon}</span>
-        <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
-      </div>
-      <p className="text-xs text-text-secondary mb-4">{description}</p>
-      {children}
-    </div>
-  );
-}
-
-function QuestionList({ items }: { items: PrepQuestion[] | string[] }) {
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-
-  return (
-    <ol className="space-y-3">
-      {items.map((item, i) => {
-        const isObject = typeof item === "object" && item !== null;
-        const question = isObject ? (item as PrepQuestion).question : (item as string);
-        const answer = isObject ? (item as PrepQuestion).suggested_answer : null;
-        const isExpanded = expandedIndex === i;
-
-        return (
-          <li key={i} className="border border-border rounded-lg overflow-hidden">
-            <button
-              type="button"
-              onClick={() => answer && setExpandedIndex(isExpanded ? null : i)}
-              className={cn(
-                "w-full flex gap-3 p-3 text-left transition-colors",
-                answer ? "cursor-pointer hover:bg-gray-50" : "cursor-default"
-              )}
-            >
-              <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center mt-0.5">
-                {i + 1}
-              </span>
-              <span className="flex-1 text-sm text-text-primary leading-relaxed font-medium">
-                {question}
-              </span>
-              {answer && (
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 text-muted flex-shrink-0 mt-0.5 transition-transform duration-200",
-                    isExpanded && "rotate-180"
-                  )}
-                />
-              )}
-            </button>
-            {answer && isExpanded && (
-              <div className="px-3 pb-3 pt-0 ml-8 mr-3">
-                <div className="rounded-md bg-blue-50 border border-blue-100 p-3">
-                  <p className="text-xs font-medium text-blue-700 mb-1">Suggested Answer</p>
-                  <p className="text-sm text-blue-900 leading-relaxed">{answer}</p>
-                </div>
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function StrengthsList({ items }: { items: string[] }) {
-  return (
-    <ul className="space-y-2">
-      {items.map((s, i) => (
-        <li
-          key={i}
-          className="flex items-start gap-2 rounded-sm bg-[#059669]/5 border border-[#059669]/10 p-3"
-        >
-          <Lightbulb className="h-3.5 w-3.5 text-[#059669] flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-text-primary">{s}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function WeakSpotsList({ items }: { items: string[] }) {
-  return (
-    <ul className="space-y-2">
-      {items.map((w, i) => (
-        <li
-          key={i}
-          className="flex items-start gap-2 rounded-sm bg-[#D97706]/5 border border-[#D97706]/10 p-3"
-        >
-          <Shield className="h-3.5 w-3.5 text-[#D97706] flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-text-primary">{w}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// ─── Mock Interview Modal (simplified for Task 8) ────────────────────
 
 function MockInterviewModal({
-  paths,
-  selectedPathId,
-  savedJobs,
-  interviewType,
-  interviewJobId,
-  interviewFormat,
-  interviewDuration,
-  interviewDifficulty,
-  onChangeType,
-  onChangeJobId,
-  onChangeFormat,
-  onChangeDuration,
-  onChangeDifficulty,
-  voiceAvailable,
+  prepId,
+  jobTitle,
+  companyName,
   onClose,
-  onBegin,
 }: {
-  paths: RolePath[];
-  selectedPathId: string;
-  savedJobs: SavedJob[];
-  interviewType: "general" | "company";
-  interviewJobId: string;
-  interviewFormat: string;
-  interviewDuration: number;
-  interviewDifficulty: string;
-  voiceAvailable: boolean | null;
-  onChangeType: (v: "general" | "company") => void;
-  onChangeJobId: (v: string) => void;
-  onChangeFormat: (v: string) => void;
-  onChangeDuration: (v: number) => void;
-  onChangeDifficulty: (v: string) => void;
+  prepId: string;
+  jobTitle: string;
+  companyName: string;
   onClose: () => void;
-  onBegin: () => void;
 }) {
-  const selectedPath = paths.find((p) => p.id === selectedPathId);
+  const router = useRouter();
+  const [interviewFormat, setInterviewFormat] = useState("behavioral");
+  const [interviewDuration, setInterviewDuration] = useState(15);
+  const [interviewDifficulty, setInterviewDifficulty] = useState("standard");
+  const [voiceAvailable, setVoiceAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setVoiceAvailable(null);
+    fetch("/api/v1/employee/interviews/health")
+      .then((r) => r.json())
+      .then((json) => {
+        setVoiceAvailable(json?.data?.available === true);
+      })
+      .catch(() => {
+        setVoiceAvailable(false);
+      });
+  }, []);
+
+  const handleBegin = () => {
+    const params = new URLSearchParams();
+    params.set("prep_id", prepId);
+    params.set("format", interviewFormat);
+    params.set("difficulty", interviewDifficulty);
+    params.set("duration", String(interviewDuration));
+    router.push(`/interviews/session?${params.toString()}`);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 transition-default"
+        className="absolute inset-0 bg-black/40 transition-all duration-200 ease-out"
         onClick={onClose}
       />
-
-      {/* Modal */}
       <div className="relative bg-surface rounded-lg border border-border shadow-lg w-full max-w-md mx-4 p-6">
-        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-semibold text-text-primary">
-              Mock Interview Setup
+              Practice Interview
             </h2>
-            {selectedPath && (
-              <p className="text-xs text-text-secondary mt-0.5">
-                For: {selectedPath.title}
-              </p>
-            )}
+            <p className="text-xs text-text-secondary mt-0.5">
+              {jobTitle} at {companyName}
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="text-text-secondary hover:text-text-primary transition-default"
+            className="text-text-secondary hover:text-text-primary transition-all duration-200 ease-out"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="space-y-4">
-          {/* Interview Type */}
-          <div>
-            <label className="text-xs font-medium text-text-secondary mb-2 block">
-              Interview Type
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => onChangeType("general")}
-                className={cn(
-                  "rounded-sm border p-3 text-left transition-default",
-                  interviewType === "general"
-                    ? "border-primary bg-primary-light"
-                    : "border-border hover:border-primary/40"
-                )}
-              >
-                <span className="block text-sm font-medium text-text-primary">
-                  General
-                </span>
-                <span className="block text-[10px] text-text-secondary mt-0.5">
-                  For this role type
-                </span>
-              </button>
-              <button
-                onClick={() => onChangeType("company")}
-                disabled={savedJobs.length === 0}
-                className={cn(
-                  "rounded-sm border p-3 text-left transition-default",
-                  interviewType === "company"
-                    ? "border-primary bg-primary-light"
-                    : "border-border hover:border-primary/40",
-                  savedJobs.length === 0 && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <span className="block text-sm font-medium text-text-primary">
-                  Company-Specific
-                </span>
-                <span className="block text-[10px] text-text-secondary mt-0.5">
-                  {savedJobs.length === 0
-                    ? "No saved jobs"
-                    : "For a specific company"}
-                </span>
-              </button>
-            </div>
-
-            {/* Company selector */}
-            {interviewType === "company" && savedJobs.length > 0 && (
-              <div className="mt-2 relative">
-                <select
-                  value={interviewJobId}
-                  onChange={(e) => onChangeJobId(e.target.value)}
-                  className="w-full appearance-none rounded-sm border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-primary focus:border-primary focus:outline-none"
-                >
-                  <option value="">Select a company</option>
-                  {savedJobs.map((j) => (
-                    <option key={j.id} value={j.job_match_id}>
-                      {j.job_title} at {j.company_name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary pointer-events-none" />
-              </div>
-            )}
-          </div>
-
           {/* Format */}
           <div>
             <label className="text-xs font-medium text-text-secondary mb-2 block">
@@ -1010,9 +1709,9 @@ function MockInterviewModal({
               {FORMAT_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => onChangeFormat(opt.value)}
+                  onClick={() => setInterviewFormat(opt.value)}
                   className={cn(
-                    "rounded-sm border py-2 text-center text-xs font-medium transition-default",
+                    "rounded-sm border py-2 text-center text-xs font-medium transition-all duration-200 ease-out",
                     interviewFormat === opt.value
                       ? "border-primary bg-primary text-white"
                       : "border-border text-text-primary hover:border-primary/40"
@@ -1030,21 +1729,22 @@ function MockInterviewModal({
               Duration
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {DURATION_OPTIONS.map((opt) => (
+              {[
+                { value: 10, label: "10 min" },
+                { value: 15, label: "15 min" },
+                { value: 20, label: "20 min" },
+              ].map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => onChangeDuration(opt.value)}
+                  onClick={() => setInterviewDuration(opt.value)}
                   className={cn(
-                    "rounded-sm border py-2 text-center transition-default",
+                    "rounded-sm border py-2 text-center text-xs font-medium transition-all duration-200 ease-out",
                     interviewDuration === opt.value
-                      ? "border-primary bg-primary-light"
-                      : "border-border hover:border-primary/40"
+                      ? "border-primary bg-primary-light text-primary"
+                      : "border-border text-text-primary hover:border-primary/40"
                   )}
                 >
-                  <Clock className="h-3.5 w-3.5 mx-auto mb-0.5 text-text-secondary" />
-                  <span className="block text-xs font-medium text-text-primary">
-                    {opt.label}
-                  </span>
+                  {opt.label}
                 </button>
               ))}
             </div>
@@ -1056,12 +1756,15 @@ function MockInterviewModal({
               Difficulty
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {DIFFICULTY_OPTIONS.map((opt) => (
+              {[
+                { value: "standard", label: "Standard" },
+                { value: "challenging", label: "Challenging" },
+              ].map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => onChangeDifficulty(opt.value)}
+                  onClick={() => setInterviewDifficulty(opt.value)}
                   className={cn(
-                    "rounded-sm border py-2 text-center text-xs font-medium transition-default",
+                    "rounded-sm border py-2 text-center text-xs font-medium transition-all duration-200 ease-out",
                     interviewDifficulty === opt.value
                       ? "border-primary bg-primary text-white"
                       : "border-border text-text-primary hover:border-primary/40"
@@ -1074,26 +1777,24 @@ function MockInterviewModal({
           </div>
         </div>
 
-        {/* Voice unavailable warning */}
         {voiceAvailable === false && (
           <div className="mt-5 rounded-md border border-[#D97706]/20 bg-[#D97706]/5 px-4 py-3 text-center">
             <p className="text-xs text-[#D97706] font-medium">
-              Voice interviews are temporarily unavailable. Please try again shortly.
+              Voice interviews are temporarily unavailable. Please try again
+              shortly.
             </p>
           </div>
         )}
 
-        {/* Begin button */}
         <Button
-          onClick={onBegin}
+          onClick={handleBegin}
           className="w-full mt-6 gap-2"
-          disabled={
-            voiceAvailable !== true ||
-            (interviewType === "company" && !interviewJobId)
-          }
+          disabled={voiceAvailable !== true}
         >
           <Mic className="h-4 w-4" />
-          {voiceAvailable === null ? "Checking availability..." : "Begin Interview"}
+          {voiceAvailable === null
+            ? "Checking availability..."
+            : "Begin Interview"}
         </Button>
         <p className="text-[10px] text-text-secondary text-center mt-2">
           Microphone access will be requested when the session starts
@@ -1109,7 +1810,20 @@ export default function InterviewsPage() {
   return (
     <EmployeeRoute>
       <DashboardLayout>
-        <InterviewsContent />
+        <Suspense
+          fallback={
+            <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-20 animate-shimmer rounded-md bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]"
+                />
+              ))}
+            </div>
+          }
+        >
+          <InterviewsContent />
+        </Suspense>
       </DashboardLayout>
     </EmployeeRoute>
   );
