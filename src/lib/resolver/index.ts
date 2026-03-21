@@ -75,13 +75,39 @@ export async function resolveDirectLink(
     }
   }
 
-  // ── Need employer_website for Tiers 1–3 ───────────────────────────────────
-  if (!job.employer_website) {
+  // ── Infer employer_website if missing ──────────────────────────────────────
+  let employerWebsite = job.employer_website;
+
+  if (!employerWebsite) {
+    // Try to infer from company name (e.g., "Salesforce" → "https://www.salesforce.com")
+    const companySlug = job.company_name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+    if (companySlug.length >= 3) {
+      const guessUrl = `https://www.${companySlug}.com`;
+      try {
+        const resp = await fetch(guessUrl, {
+          method: "HEAD",
+          redirect: "follow",
+          signal: AbortSignal.timeout(5000),
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        if (resp.ok) {
+          employerWebsite = guessUrl;
+        }
+      } catch {
+        // Guess failed, continue without employer website
+      }
+    }
+  }
+
+  if (!employerWebsite) {
     return fallback(job);
   }
 
   // ── TIER 1: ATS API Lookup ─────────────────────────────────────────────────
-  const ats = await detectATS(job.employer_website);
+  const ats = await detectATS(employerWebsite);
 
   if (ats.ats_platform && ats.ats_slug && ATS_CONFIGS[ats.ats_platform]) {
     const match = await resolveViaTier1(ats.ats_platform, ats.ats_slug, job.title);
@@ -101,7 +127,7 @@ export async function resolveDirectLink(
         job.id,
         job.external_id,
         job.company_name,
-        extractDomain(job.employer_website),
+        extractDomain(employerWebsite),
         job.title,
         result
       );
@@ -134,7 +160,7 @@ export async function resolveDirectLink(
         job.id,
         job.external_id,
         job.company_name,
-        extractDomain(job.employer_website),
+        extractDomain(employerWebsite),
         job.title,
         result
       );
@@ -143,7 +169,7 @@ export async function resolveDirectLink(
   }
 
   // ── TIER 3: LLM Resolver ───────────────────────────────────────────────────
-  const careersUrl = ats.careers_url ?? job.employer_website;
+  const careersUrl = ats.careers_url ?? employerWebsite;
   const llmMatch = await resolveViaTier3(careersUrl, job.title, job.company_name);
 
   if (llmMatch) {
@@ -166,7 +192,7 @@ export async function resolveDirectLink(
       job.id,
       job.external_id,
       job.company_name,
-      extractDomain(job.employer_website),
+      extractDomain(employerWebsite),
       job.title,
       result
     );
