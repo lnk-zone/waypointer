@@ -8,7 +8,7 @@
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
