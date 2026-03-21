@@ -33,6 +33,8 @@ import {
 // ─── Request Schemas ────────────────────────────────────────────────
 
 const prepRequestSchema = z.object({
+  job_title: z.string().min(1, "Job title is required").max(200),
+  company_name: z.string().max(200).optional(),
   job_description: z.string().min(50, "Job description must be at least 50 characters"),
   job_match_id: z.string().uuid().optional(),
   interviewer_titles: z.array(z.string()).max(5).optional(),
@@ -83,6 +85,8 @@ export async function POST(request: NextRequest) {
   }
 
   const {
+    job_title: inputJobTitle,
+    company_name: inputCompanyName,
     job_description: userJobDescription,
     job_match_id: jobMatchId,
     interviewer_titles: interviewerTitles,
@@ -107,10 +111,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Resolve job details from job_match_id if provided
+  // Use user-provided title and company; optionally enrich from job_match
   let jobDescription = userJobDescription;
-  let jobTitle = "";
-  let companyName = "";
+  let jobTitle = inputJobTitle;
+  let companyName = inputCompanyName ?? "";
 
   if (jobMatchId) {
     const { data: rawMatch } = await supabase
@@ -122,8 +126,9 @@ export async function POST(request: NextRequest) {
 
     if (rawMatch) {
       const match = rawMatch as unknown as JobMatchRow;
-      jobTitle = match.job_listings.title;
-      companyName = match.job_listings.company_name;
+      // Fill in title/company from match if user left them empty
+      if (!jobTitle) jobTitle = match.job_listings.title;
+      if (!companyName) companyName = match.job_listings.company_name;
 
       // Use fetched description if user-provided one is shorter
       const fetchedDesc = match.job_listings.description_full ?? "";
@@ -131,12 +136,6 @@ export async function POST(request: NextRequest) {
         jobDescription = fetchedDesc;
       }
     }
-  }
-
-  // If no job_match_id, extract job title from first line of pasted JD
-  if (!jobMatchId || !jobTitle) {
-    const firstLine = jobDescription.split("\n")[0]?.trim();
-    jobTitle = firstLine && firstLine.length <= 120 ? firstLine : "Custom Position";
   }
 
   // ─── Cache Deduplication ────────────────────────────────────────

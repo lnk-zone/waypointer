@@ -240,6 +240,8 @@ function InterviewsContent() {
   const [view, setView] = useState<"form" | "loading" | "results">("form");
 
   // Form inputs
+  const [jobTitleInput, setJobTitleInput] = useState("");
+  const [companyNameInput, setCompanyNameInput] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [jobMatchId, setJobMatchId] = useState<string>("");
   const [interviewerTitles, setInterviewerTitles] = useState<string[]>([""]);
@@ -376,7 +378,7 @@ function InterviewsContent() {
   // ─── Generate interview guide ───────────────────────────────────────
 
   const generateGuide = useCallback(async () => {
-    if (jobDescription.length < MIN_JOB_DESCRIPTION_LENGTH) return;
+    if (!jobTitleInput.trim() || jobDescription.length < MIN_JOB_DESCRIPTION_LENGTH) return;
 
     setGenerating(true);
     setView("loading");
@@ -387,9 +389,14 @@ function InterviewsContent() {
       );
 
       const body: Record<string, unknown> = {
+        job_title: jobTitleInput.trim(),
         job_description: jobDescription,
         format,
       };
+
+      if (companyNameInput.trim()) {
+        body.company_name = companyNameInput.trim();
+      }
 
       if (jobMatchId) {
         body.job_match_id = jobMatchId;
@@ -438,6 +445,8 @@ function InterviewsContent() {
       setGenerating(false);
     }
   }, [
+    jobTitleInput,
+    companyNameInput,
     jobDescription,
     jobMatchId,
     interviewerTitles,
@@ -541,6 +550,8 @@ function InterviewsContent() {
       );
       if (job) {
         setJobMatchId(job.job_match_id);
+        setJobTitleInput(job.job_title);
+        setCompanyNameInput(job.company_name);
         if (job.description) {
           setJobDescription(job.description);
         }
@@ -606,6 +617,30 @@ function InterviewsContent() {
 
             {/* Input Form */}
             <Card className="p-6 space-y-6">
+              {/* Job Title & Company Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="job-title-input">
+                    Job Title <span className="text-danger">*</span>
+                  </Label>
+                  <Input
+                    id="job-title-input"
+                    value={jobTitleInput}
+                    onChange={(e) => setJobTitleInput(e.target.value)}
+                    placeholder="e.g., Senior Data Analyst"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-name-input">Company Name</Label>
+                  <Input
+                    id="company-name-input"
+                    value={companyNameInput}
+                    onChange={(e) => setCompanyNameInput(e.target.value)}
+                    placeholder="e.g., GreenShield"
+                  />
+                </div>
+              </div>
+
               {/* Job Description */}
               <div className="space-y-2">
                 <Label htmlFor="job-description">
@@ -770,6 +805,7 @@ function InterviewsContent() {
                 onClick={generateGuide}
                 disabled={
                   generating ||
+                  !jobTitleInput.trim() ||
                   jobDescription.length < MIN_JOB_DESCRIPTION_LENGTH
                 }
                 className="w-full gap-2"
