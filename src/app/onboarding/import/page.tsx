@@ -68,37 +68,7 @@ const WORK_AUTH_OPTIONS = [
   { value: "other", label: "Other" },
 ] as const;
 
-const COUNTRIES = [
-  { value: "US", label: "United States" }, { value: "CA", label: "Canada" },
-  { value: "GB", label: "United Kingdom" }, { value: "AU", label: "Australia" },
-  { value: "DE", label: "Germany" }, { value: "FR", label: "France" },
-  { value: "NL", label: "Netherlands" }, { value: "IE", label: "Ireland" },
-  { value: "SG", label: "Singapore" }, { value: "IN", label: "India" },
-  { value: "NG", label: "Nigeria" }, { value: "GH", label: "Ghana" },
-  { value: "KE", label: "Kenya" }, { value: "ZA", label: "South Africa" },
-  { value: "AE", label: "United Arab Emirates" }, { value: "SA", label: "Saudi Arabia" },
-  { value: "BR", label: "Brazil" }, { value: "MX", label: "Mexico" },
-  { value: "JP", label: "Japan" }, { value: "KR", label: "South Korea" },
-  { value: "CN", label: "China" }, { value: "HK", label: "Hong Kong" },
-  { value: "TW", label: "Taiwan" }, { value: "IL", label: "Israel" },
-  { value: "SE", label: "Sweden" }, { value: "NO", label: "Norway" },
-  { value: "DK", label: "Denmark" }, { value: "FI", label: "Finland" },
-  { value: "CH", label: "Switzerland" }, { value: "AT", label: "Austria" },
-  { value: "BE", label: "Belgium" }, { value: "ES", label: "Spain" },
-  { value: "IT", label: "Italy" }, { value: "PT", label: "Portugal" },
-  { value: "PL", label: "Poland" }, { value: "CZ", label: "Czech Republic" },
-  { value: "NZ", label: "New Zealand" }, { value: "PH", label: "Philippines" },
-  { value: "MY", label: "Malaysia" }, { value: "TH", label: "Thailand" },
-  { value: "VN", label: "Vietnam" }, { value: "ID", label: "Indonesia" },
-  { value: "EG", label: "Egypt" }, { value: "CO", label: "Colombia" },
-  { value: "AR", label: "Argentina" }, { value: "CL", label: "Chile" },
-  { value: "PE", label: "Peru" }, { value: "PK", label: "Pakistan" },
-  { value: "BD", label: "Bangladesh" }, { value: "LK", label: "Sri Lanka" },
-  { value: "RW", label: "Rwanda" }, { value: "TZ", label: "Tanzania" },
-  { value: "UG", label: "Uganda" }, { value: "ET", label: "Ethiopia" },
-  { value: "CM", label: "Cameroon" }, { value: "SN", label: "Senegal" },
-  { value: "CI", label: "Ivory Coast" }, { value: "ML", label: "Mali" },
-] as const;
+import { COUNTRIES } from "@/lib/constants/countries";
 
 const COMP_MIN = 30000;
 const COMP_MAX = 300000;
