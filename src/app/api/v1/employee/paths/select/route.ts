@@ -78,6 +78,16 @@ export async function POST(request: NextRequest) {
     return apiError(ERROR_CODES.INTERNAL_ERROR, "Failed to save selections");
   }
 
+  // Sync boolean flags on employee_profiles
+  await supabase
+    .from("employee_profiles")
+    .update({
+      paths_selected: true,
+      onboarding_completed: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", employee.id);
+
   return NextResponse.json({
     paths_selected: true,
     selected_count: updatedCount ?? (1 + secondary_path_ids.length),

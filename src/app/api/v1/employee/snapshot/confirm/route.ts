@@ -64,5 +64,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Sync the boolean flag on employee_profiles
+  await supabase
+    .from("employee_profiles")
+    .update({
+      snapshot_confirmed: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", employee.id);
+
   return NextResponse.json({ snapshot_confirmed: true });
 }

@@ -407,29 +407,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Update employee profile with years_of_experience and most recent role
-    if (structural.work_history.length > 0) {
-      const mostRecent = structural.work_history[0];
+    {
       const updatePayload: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
-      if (structural.total_years_experience !== null) {
+      if (structural.total_years_experience !== null && structural.total_years_experience !== undefined) {
         updatePayload.years_of_experience = structural.total_years_experience;
       }
-      if (mostRecent.title) {
-        updatePayload.most_recent_role = mostRecent.title;
-      }
-      if (mostRecent.company) {
-        updatePayload.most_recent_company = mostRecent.company;
+      if (structural.work_history.length > 0) {
+        const mostRecent = structural.work_history[0];
+        if (mostRecent.title) {
+          updatePayload.most_recent_role = mostRecent.title;
+        }
+        if (mostRecent.company) {
+          updatePayload.most_recent_company = mostRecent.company;
+        }
       }
 
-      const { error: profileUpdateError } = await supabase
-        .from("employee_profiles")
-        .update(updatePayload)
-        .eq("id", employee.id);
+      // Only update if we have something beyond just updated_at
+      if (Object.keys(updatePayload).length > 1) {
+        const { error: profileUpdateError } = await supabase
+          .from("employee_profiles")
+          .update(updatePayload)
+          .eq("id", employee.id);
 
-      if (profileUpdateError) {
-        logDbError("update_employee_profile", profileUpdateError);
-        // Non-critical: snapshot data is saved, profile sync is best-effort
+        if (profileUpdateError) {
+          logDbError("update_employee_profile", profileUpdateError);
+          // Non-critical: snapshot data is saved, profile sync is best-effort
+        }
       }
     }
 
